@@ -1,0 +1,5 @@
+repo: https://github.com/kubernetes/kubernetes.git
+includes:
+  - layer:basic
+  - interface:etcd
+  - interface:http
