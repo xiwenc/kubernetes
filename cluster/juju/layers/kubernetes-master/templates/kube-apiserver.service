@@ -1,8 +1,8 @@
 [Unit]
 Description=Kubernetes API Server
 Documentation=http://kubernetes.io/docs/admin/kube-apiserver/
-After=network.target docker.socket
-Requires=docker.socket
+Wants=network-online.target
+After=network.target network-online.target
 
 [Service]
 Type=notify

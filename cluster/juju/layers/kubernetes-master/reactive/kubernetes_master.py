@@ -51,7 +51,7 @@ def install():
     set_state('kube_master_components.installed')
 
 
-#@when('k8s.certificate.authority available')
+# @when('k8s.certificate.authority available')
 @when('etcd.available')
 def start_master(etcd):
     '''Run the Kubernetes master components.'''
@@ -232,7 +232,7 @@ def render_service(service_name, context):
     source = '{0}.service'.format(service_name)
     target = os.path.join(unit_directory, '{0}.service'.format(service_name))
     render(source, target, context)
-    conf_directory = '/etc/default/{0}'.format(service_name)
+    conf_directory = '/etc/default'
     source = '{0}.defaults'.format(service_name)
     target = os.path.join(conf_directory, service_name)
     render(source, target, context)
