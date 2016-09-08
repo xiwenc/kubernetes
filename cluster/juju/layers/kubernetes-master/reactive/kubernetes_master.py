@@ -30,16 +30,19 @@ def install():
                 'kube-scheduler']
     for service in services:
         # Install each one of the service binaries in /usr/local/bin.
-        install = 'install {0}/{1} {2}'.format(files_dir, service, dest_dir)
+        install = 'install -v {0}/{1} {2}'.format(files_dir, service, dest_dir)
         return_code = call(split(install))
         if return_code != 0:
             raise Exception('Unable to install {0}'.format(service))
     # Install the kubectl tool, which is not a run as a systemd service.
-    install = 'install {0}/{1} {2}'.format(files_dir, 'kubectl', dest_dir)
+    install = 'install -v {0}/{1} {2}'.format(files_dir, 'kubectl', dest_dir)
+    return_code = call(split(install))
+    if return_code != 0:
+        raise Exception('Unable to install kubectl')
     set_state('kube_master_components.installed')
 
 
-@when('k8s.certificate.authority available')
+#@when('k8s.certificate.authority available')
 @when('etcd.available')
 def start_master(etcd):
     '''Run the Kubernetes master components.'''
@@ -216,11 +219,11 @@ def start_service(service_name):
 
 def render_service(service_name, context):
     '''Render the systemd service by name.'''
-    unit_directory = '/etc/systemd/system'
+    unit_directory = '/lib/systemd/system'
     source = '{0}.service'.format(service_name)
-    target = os.path.join(unit_directory, service_name)
+    target = os.path.join(unit_directory, '{0}.service'.format(service_name))
     render(source, target, context)
-    conf_directory = '/etc/defaults/{0}'.format(service_name)
+    conf_directory = '/etc/default/{0}'.format(service_name)
     source = '{0}.defaults'.format(service_name)
     target = os.path.join(conf_directory, service_name)
     render(source, target, context)
