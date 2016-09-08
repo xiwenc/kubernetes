@@ -42,7 +42,7 @@ def install():
     set_state('kube_master_components.installed')
 
 
-@when('k8s.certificate.authority available')
+#@when('k8s.certificate.authority available')
 @when('etcd.available')
 def start_master(etcd):
     '''Run the Kubernetes master components.'''
