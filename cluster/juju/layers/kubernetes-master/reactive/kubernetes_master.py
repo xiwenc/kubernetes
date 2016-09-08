@@ -55,10 +55,6 @@ def install():
 @when_not('authentication.setup')
 def setup_authentication():
     '''Setup basic authentication and token access for the cluster.'''
-    kubernetes_directory = '/srv/kubernetes'
-    if not os.path.isdir(kubernetes_directory):
-        os.makedirs(kubernetes_directory)
-
     htaccess = '/srv/kubernetes/basic_auth.csv'
     if not os.path.isfile(htaccess):
         setup_basic_auth('admin', 'admin', 'admin')
