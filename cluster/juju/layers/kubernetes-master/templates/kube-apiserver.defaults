@@ -8,11 +8,8 @@ DAEMON_ARGS="\
 {%- endif %}
 --etcd-servers={{ connection_string }} \
 --admission-control=NamespaceLifecycle,LimitRanger,SecurityContextDeny,ServiceAccount,ResourceQuota \
---client-ca-file=/srv/kubernetes/ca.crt \
 --basic-auth-file=/srv/kubernetes/basic_auth.csv \
 --min-request-timeout=300 \
---tls-cert-file=/srv/kubernetes/server.crt \
---tls-private-key-file=/srv/kubernetes/server.key \
 --token-auth-file=/srv/kubernetes/known_tokens.csv \
 --allow-privileged=true \
 --v=4"

@@ -1,8 +1,8 @@
 [Unit]
 Description=Kubernetes Scheduler
 Documentation=http://kubernetes.io/docs/admin/kube-scheduler/
-After=unit.target kube-apiserver
-Requires=kube-apiserver
+After=unit.target kube-apiserver.service
+Requires=kube-apiserver.service
 
 [Service]
 Type=notify
