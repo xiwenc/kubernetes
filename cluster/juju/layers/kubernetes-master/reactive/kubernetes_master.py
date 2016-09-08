@@ -18,8 +18,17 @@ from charmhelpers.core.templating import render
 @when_not('kube_master_components.installed')
 def install():
     '''Unpack the Kubernetes master binary files.'''
+    # Get the resource via resource_get
+    archive = hookenv.resource_get('kubernetes')
+    if not archive:
+        hookenv.status_set('blocked', 'Missing kubernetes binary package')
+        return
+
+    hookenv.status_set('maintenance', 'Unpacking Kubernetes.')
     files_dir = os.path.join(hookenv.charm_dir(), 'files')
-    archive = os.path.join(files_dir, 'kubernetes.tar.gz')
+
+    os.makedirs(files_dir, exist_ok=True)
+
     command = 'tar -xvzf {0} -C {1}'.format(archive, files_dir)
     print(command)
     return_code = call(split(command))
