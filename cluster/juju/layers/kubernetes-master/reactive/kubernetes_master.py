@@ -253,7 +253,8 @@ def setup_tokens(token, username, user):
         os.makedirs(srv_kubernetes)
     known_tokens = os.path.join(srv_kubernetes, 'known_tokens.csv')
     if not token:
-        token = ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(26))  # noqa
+        alpha = string.ascii_letters + string.digits
+        token = ''.join(random.SystemRandom().choice(alpha) for _ in range(32))
     with open(known_tokens, 'w') as stream:
         stream.write('{0},{1},{2}'.format(token, username, user))
 
