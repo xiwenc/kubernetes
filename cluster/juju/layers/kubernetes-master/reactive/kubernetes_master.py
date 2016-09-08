@@ -60,9 +60,9 @@ def setup_authentication():
         setup_basic_auth('admin', 'admin', 'admin')
     known_tokens = '/srv/kubernetes/known_tokens.csv'
     if not os.path.isfile(known_tokens):
+        setup_tokens(None, 'admin', 'admin')
         setup_tokens(None, 'kubelet', 'kubelet')
-        setup_tokens(None, 'kube-proxy', 'kube-proxy')
-        setup_tokens(None, 'kubectl', 'kubectl')
+        setup_tokens(None, 'kube_proxy', 'kube_proxy')
     set_state('authentication.setup')
 
 
