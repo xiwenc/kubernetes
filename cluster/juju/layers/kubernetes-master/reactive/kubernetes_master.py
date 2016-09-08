@@ -51,6 +51,21 @@ def install():
     set_state('kube_master_components.installed')
 
 
+@when('kube_master_components.installed')
+@when_not('authentication.setup')
+def setup_authentication():
+    '''Setup basic authentication and token access for the cluster.'''
+    htaccess = '/srv/kubernetes/basic_auth.csv'
+    if not os.path.isfile(htaccess):
+        setup_basic_auth('admin', 'admin', 'admin')
+    known_tokens = '/srv/kubernetes/known_tokens.csv'
+    if not os.path.isfile(known_tokens):
+        setup_tokens(None, 'admin', 'admin')
+        setup_tokens(None, 'kubelet', 'kubelet')
+        setup_tokens(None, 'kube_proxy', 'kube_proxy')
+    set_state('authentication.setup')
+
+
 # @when('k8s.certificate.authority available')
 @when('etcd.available')
 def start_master(etcd):
@@ -215,6 +230,29 @@ def get_sdn_ip(cidr):
     ip = cidr.split('/')[0]
     # Remove the last octet and replace it with 1.
     return '.'.join(ip.split('.')[0:-1]) + '.1'
+
+
+def setup_basic_auth(username='admin', password='admin', user='admin'):
+    '''Create the htacces file and the tokens.'''
+    srv_kubernetes = '/srv/kubernetes'
+    if not os.path.isdir(srv_kubernetes):
+        os.makedirs(srv_kubernetes)
+    htaccess = os.path.join(srv_kubernetes, 'basic_auth.csv')
+    with open(htaccess, 'w') as stream:
+        stream.write('{0},{1},{2}'.format(username, password, user))
+
+
+def setup_tokens(token, username, user):
+    '''Create a token file for kubernetes authentication.'''
+    srv_kubernetes = '/srv/kubernetes'
+    if not os.path.isdir(srv_kubernetes):
+        os.makedirs(srv_kubernetes)
+    known_tokens = os.path.join(srv_kubernetes, 'known_tokens.csv')
+    if not token:
+        alpha = string.ascii_letters + string.digits
+        token = ''.join(random.SystemRandom().choice(alpha) for _ in range(32))
+    with open(known_tokens, 'w') as stream:
+        stream.write('{0},{1},{2}'.format(token, username, user))
 
 
 def start_service(service_name):
