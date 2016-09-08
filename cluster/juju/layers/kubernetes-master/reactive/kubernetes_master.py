@@ -58,23 +58,37 @@ def launch_dns():
     '''Create the "kube-system" namespace, the kubedns resource controller, and
     the kubedns service. '''
     hookenv.status_set('maintenance',
-                       'Rendering the Kubernetes DNS systemd files.')
+                       'Rendering the Kubernetes DNS files.')
+    # Render the DNS files with the cider information.
+    render_files()
     # Run a command to check if the apiserver is responding.
     return_code = call(split('kubectl cluster-info'))
     if return_code != 0:
         hookenv.log('kubectl command failed, waiting for apiserver to start.')
         remove_state('kubedns.available')
-        # Return without setting kubedns.available so this method will retry.
+        # Return without setting kube-dns.available so this method will retry.
         return
     # Check for the "kube-system" namespace.
     return_code = call(split('kubectl get namespace kube-system'))
     if return_code != 0:
         # Create the kube-system namespace that is used by the kubedns files.
         check_call(split('kubectl create namespace kube-system'))
-    # Rember
-    render_files()
-    if start_service('kube-dns'):
-        set_state('kube-dns.available')
+    manifests_dir = os.path.join(hookenv.charm_dir(), 'files/manifests')
+    # Check for the kubedns replication controller.
+    get = 'kubectl get -f {0}/kubedns-rc.yaml'.format(manifests_dir)
+    return_code = call(split(get))
+    if return_code != 0:
+        # Create the kubedns replication controller from the rendered file.
+        create = 'kubectl create -f {0}/kubedns-rc.yaml'.format(manifests_dir)
+        check_call(split(create))
+    # Check for the kubedns service.
+    get = 'kubectl get -f {0}/kubedns-svc.yaml'.format(manifests_dir)
+    return_code = call(split(get))
+    if return_code != 0:
+        # Create the kubedns service from the rendered file.
+        create = 'kubectl create -f {0}/kubedns-svc.yaml'.format(manifests_dir)
+        check_call(split(create))
+    set_state('kube-dns.available')
 
 
 def arch():
@@ -119,9 +133,6 @@ def render_files(reldata=None):
                         'etcd_cert': cert})
 
     charm_dir = hookenv.charm_dir()
-    rendered_kube_dir = os.path.join(charm_dir, 'files/kubernetes')
-    if not os.path.exists(rendered_kube_dir):
-        os.makedirs(rendered_kube_dir)
     rendered_manifest_dir = os.path.join(charm_dir, 'files/manifests')
     if not os.path.exists(rendered_manifest_dir):
         os.makedirs(rendered_manifest_dir)
@@ -129,7 +140,6 @@ def render_files(reldata=None):
     # Update the context with extra values, arch, manifest dir, and private IP.
     context.update({'arch': arch(),
                     'master_address': hookenv.unit_get('private-address'),
-                    'manifest_directory': rendered_manifest_dir,
                     'public_address': hookenv.unit_get('public-address'),
                     'private_address': hookenv.unit_get('private-address')})
 
@@ -138,7 +148,15 @@ def render_files(reldata=None):
     render_service('kube-apiserver', context)
     render_service('kube-controller-manager', context)
     render_service('kube-scheduler', context)
-    render_service('kube-dns', context)
+
+    # Source: ...cluster/addons/dns/skydns-svc.yaml.in
+    target = os.path.join(rendered_manifest_dir, 'kubedns-svc.yaml')
+    # Render files/kubernetes/kubedns-svc.yaml for the DNS service.
+    render('kubedns-svc.yaml', target, context)
+    # Source: ...cluster/addons/dns/skydns-rc.yaml.in
+    target = os.path.join(rendered_manifest_dir, 'kubedns-rc.yaml')
+    # Render files/kubernetes/kubedns-rc.yaml for the DNS pod.
+    render('kubedns-rc.yaml', target, context)
 
 
 def gather_sdn_data():
