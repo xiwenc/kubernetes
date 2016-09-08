@@ -3,7 +3,7 @@ summary: A charm that provides a Kubernetes master node, that can be scaled for 
 maintainers:
     - Matthew Bruzek <matthew.bruzek@canonical.com>
     - Charles Butler <charles.butler@canonical.com>
-description: | 
+description: |
   Kubernetes is an open-source platform for deplying, scaling, and operations
   of appliation containers across a cluster of hosts. Kubernetes is portable
   in that it works with public, private, and hybrid clouds. Extensible through
@@ -14,3 +14,16 @@ tags:
   - kubernetes
   - master
 subordinate: false
+series:
+  - xenial
+provides:
+  kube-api:
+    interface: http
+requires:
+  etcd:
+    interface: etcd
+resources:
+  kubernetes:
+    type: file
+    filename: kubernetes.tar.gz
+    description: "A tarball packaged release of the kubernetes bins."
