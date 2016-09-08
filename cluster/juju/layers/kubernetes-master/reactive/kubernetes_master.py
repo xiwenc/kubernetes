@@ -21,17 +21,22 @@ def install():
     files_dir = os.path.join(hookenv.charm_dir(), 'files')
     archive = os.path.join(files_dir, 'kubernetes.tar.gz')
     command = 'tar -xvzf {0} -C {1}'.format(archive, files_dir)
+    print(command)
     return_code = call(split(command))
     dest_dir = '/usr/local/bin/'
+    # Create a list of components to install.
     services = ['kube-apiserver',
                 'kube-controller-manager',
-                'kube-scheduler',
-                'kube-dns']
+                'kube-scheduler']
     for service in services:
-        install = 'install {0}/{1} {3}'.format(files_dir, service, dest_dir)
+        # Install each one of the service binaries in /usr/local/bin.
+        install = 'install {0}/{1} {2}'.format(files_dir, service, dest_dir)
         return_code = call(split(install))
         if return_code != 0:
             raise Exception('Unable to install {0}'.format(service))
+    # Install the kubectl tool, which is not a run as a systemd service.
+    install = 'install {0}/{1} {2}'.format(files_dir, 'kubectl', dest_dir)
+    set_state('kube_master_components.installed')
 
 
 @when('k8s.certificate.authority available')
