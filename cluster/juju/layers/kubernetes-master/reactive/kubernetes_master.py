@@ -30,12 +30,15 @@ def install():
                 'kube-scheduler']
     for service in services:
         # Install each one of the service binaries in /usr/local/bin.
-        install = 'install {0}/{1} {2}'.format(files_dir, service, dest_dir)
+        install = 'install -v {0}/{1} {2}'.format(files_dir, service, dest_dir)
         return_code = call(split(install))
         if return_code != 0:
             raise Exception('Unable to install {0}'.format(service))
     # Install the kubectl tool, which is not a run as a systemd service.
-    install = 'install {0}/{1} {2}'.format(files_dir, 'kubectl', dest_dir)
+    install = 'install -v {0}/{1} {2}'.format(files_dir, 'kubectl', dest_dir)
+    return_code = call(split(install))
+    if return_code != 0:
+        raise Exception('Unable to install kubectl')
     set_state('kube_master_components.installed')
 
 
