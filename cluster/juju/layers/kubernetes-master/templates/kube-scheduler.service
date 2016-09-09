@@ -1,14 +1,14 @@
 [Unit]
 Description=Kubernetes Scheduler
 Documentation=http://kubernetes.io/docs/admin/kube-scheduler/
-After=unit.target kube-apiserver.service
-Requires=kube-apiserver.service
+After=kube-apiserver.service
 
 [Service]
-Type=notify
 EnvironmentFile=-/etc/default/kube-scheduler
 ExecStart=/usr/local/bin/kube-scheduler $DAEMON_ARGS
 TimeoutStartSec=0
+Restart=on-failure
+LimitNOFILE=655536
 
 [Install]
 WantedBy=multi-user.target

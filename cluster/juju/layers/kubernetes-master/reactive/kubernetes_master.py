@@ -1,4 +1,6 @@
 import os
+import string
+import random
 
 from shlex import split
 from subprocess import call
@@ -55,6 +57,7 @@ def install():
 @when_not('authentication.setup')
 def setup_authentication():
     '''Setup basic authentication and token access for the cluster.'''
+    hookenv.status_set('maintenance', 'Rendering authentication templates.')
     htaccess = '/srv/kubernetes/basic_auth.csv'
     if not os.path.isfile(htaccess):
         setup_basic_auth('admin', 'admin', 'admin')
@@ -82,6 +85,7 @@ def start_master(etcd):
     for service in services:
         if start_service(service):
             set_state('{0}.available'.format(service))
+    hookenv.status_set('active', 'Kubernetes master running.')
 
 
 @when('apiserver.available')

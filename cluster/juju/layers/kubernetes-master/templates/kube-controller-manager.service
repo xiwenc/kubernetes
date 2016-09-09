@@ -1,14 +1,15 @@
 [Unit]
 Description=Kubernetes Controller Manager
 Documentation=http://kubernetes.io/docs/admin/kube-controller-manager/
-After=unit.target kube-apiserver.service
-Requires=kube-apiserver.service
+After=kube-apiserver.service
 
 [Service]
-Type=notify
 EnvironmentFile=-/etc/default/kube-controller-manager
 ExecStart=/usr/local/bin/kube-controller-manager $DAEMON_ARGS
 TimeoutStartSec=0
+LimitNOFILE=655536
+Restart=on-failure
+
 
 [Install]
 WantedBy=multi-user.target
