@@ -9,6 +9,8 @@ Type=notify
 EnvironmentFile=-/etc/default/kube-apiserver
 ExecStart=/usr/local/bin/kube-apiserver $DAEMON_ARGS
 TimeoutStartSec=0
+Restart=on-failure
+LimitNOFILE=655536
 
 [Install]
 WantedBy=multi-user.target

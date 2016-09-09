@@ -1,6 +1,5 @@
 DAEMON_ARGS="\
 --master=127.0.0.1:8080 \
 --service-account-private-key-file=/srv/kubernetes/server.key \
---root-ca-file=/srv/kubernetes/ca.crt \
 --min-resync-period=3m \
 --v=2"
