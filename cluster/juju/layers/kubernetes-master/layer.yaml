@@ -3,3 +3,4 @@ includes:
   - layer:basic
   - interface:etcd
   - interface:http
+  - interface:sdn-plugin

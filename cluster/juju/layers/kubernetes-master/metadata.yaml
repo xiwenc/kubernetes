@@ -19,6 +19,9 @@ series:
 provides:
   kube-api:
     interface: http
+  sdn-plugin:
+    interface: sdn-plugin
+    scope: container
 requires:
   etcd:
     interface: etcd

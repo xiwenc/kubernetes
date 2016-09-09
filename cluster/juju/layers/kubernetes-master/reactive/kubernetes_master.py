@@ -6,6 +6,7 @@ from shlex import split
 from subprocess import call
 from subprocess import check_call
 from subprocess import check_output
+from subprocess import CalledProcessError
 
 from charms.reactive import remove_state
 from charms.reactive import set_state
@@ -193,6 +194,12 @@ def render_files(reldata=None):
     target = os.path.join(rendered_manifest_dir, 'kubedns-rc.yaml')
     # Render files/kubernetes/kubedns-rc.yaml for the DNS pod.
     render('kubedns-rc.yaml', target, context)
+    # when files change on disk, we need to inform systemd of the changes
+    try:
+        check_call(['systemctl', 'daemon-reload'])
+    except CalledProcessError:
+        # we failed, chances are no changes were made. so assume this is fine
+        pass
 
 
 def gather_sdn_data():
