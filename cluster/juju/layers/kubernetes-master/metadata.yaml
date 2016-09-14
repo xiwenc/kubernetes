@@ -17,8 +17,11 @@ subordinate: false
 series:
   - xenial
 provides:
-  kube-api:
+  kube-api-endpoint:
     interface: http
+  sdn-plugin:
+    interface: sdn-plugin
+    scope: container
 requires:
   etcd:
     interface: etcd

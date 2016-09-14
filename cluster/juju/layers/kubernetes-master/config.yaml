@@ -16,3 +16,7 @@ options:
     description: |
       The domain name to use for the Kubernetes cluster by the
       skydns service.
+  dashboard:
+    type: boolean
+    default: True
+    description: Deploy the Kubernetes Dashboard

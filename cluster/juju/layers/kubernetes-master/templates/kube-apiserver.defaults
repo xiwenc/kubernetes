@@ -11,5 +11,6 @@ DAEMON_ARGS="\
 --basic-auth-file=/srv/kubernetes/basic_auth.csv \
 --min-request-timeout=300 \
 --token-auth-file=/srv/kubernetes/known_tokens.csv \
+--service-account-key-file=/etc/kubernetes/serviceaccount.key \
 --allow-privileged=true \
 --v=4"

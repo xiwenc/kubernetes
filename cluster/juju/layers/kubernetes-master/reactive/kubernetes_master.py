@@ -6,6 +6,7 @@ from shlex import split
 from subprocess import call
 from subprocess import check_call
 from subprocess import check_output
+from subprocess import CalledProcessError
 
 from charms.reactive import remove_state
 from charms.reactive import set_state
@@ -66,6 +67,10 @@ def setup_authentication():
         setup_tokens(None, 'admin', 'admin')
         setup_tokens(None, 'kubelet', 'kubelet')
         setup_tokens(None, 'kube_proxy', 'kube_proxy')
+    # Generate the default service account token key
+    os.makedirs('/etc/kubernetes', exist_ok=True)
+    cmd = ['openssl', 'genrsa', '-out', '/etc/kubernetes/serviceaccount.key', '2048']
+    check_call(cmd)
     set_state('authentication.setup')
 
 
@@ -125,6 +130,29 @@ def launch_dns():
         create = 'kubectl create -f {0}/kubedns-svc.yaml'.format(manifests_dir)
         check_call(split(create))
     set_state('kube-dns.available')
+
+
+# TODO: This needs a much better relationship name...
+@when('kube-api-endpoint.available')
+def push_service_data(kube_api):
+    kube_api.configure(port=8080)
+
+
+@when_not('kubernetes.dashboard.available')
+def launch_kubernetes_dashboard():
+    ''' Launch the Kubernetes dashboard. If not enabled, attempt deletion '''
+    if hookenv.config('dashboard'):
+        dashboard_manifest = 'https://rawgit.com/kubernetes/dashboard/master/src/deploy/kubernetes-dashboard.yaml' # noqa
+        cmd = ['kubectl', 'create', '-f', dashboard_manifest]
+        call(cmd)
+        set_state('kubernetes.dashboard.available')
+    else:
+        cmd = ['kubectl', 'delete', 'kubernetes-dashboard',
+               '--namespace=kube-system']
+        try:
+            call(cmd)
+        except CalledProcessError:
+            pass
 
 
 def arch():
@@ -193,6 +221,12 @@ def render_files(reldata=None):
     target = os.path.join(rendered_manifest_dir, 'kubedns-rc.yaml')
     # Render files/kubernetes/kubedns-rc.yaml for the DNS pod.
     render('kubedns-rc.yaml', target, context)
+    # when files change on disk, we need to inform systemd of the changes
+    try:
+        check_call(['systemctl', 'daemon-reload'])
+    except CalledProcessError:
+        # we failed, chances are no changes were made. so assume this is fine
+        pass
 
 
 def gather_sdn_data():
