@@ -34,6 +34,7 @@ def _reconfigure_docker_for_sdn():
 def install_kubernetes_components():
     ''' Unpack the kubernetes worker binaries '''
     kube_package = hookenv.resource_get('kubernetes')
+    charm_dir = os.getenv('CHARM_DIR')
 
     if not kube_package:
         hookenv.status_set('blocked', 'Missing kubernetes package')
@@ -41,7 +42,7 @@ def install_kubernetes_components():
 
     hookenv.status_set('maintenance', 'Unpacking kubernetes')
 
-    unpack_path = './files/kubernetes'
+    unpack_path = '{}/files/kubernetes'.format(charm_dir)
     os.makedirs(unpack_path, exist_ok=True)
     cmd = ['tar', 'xfz', kube_package, '-C', unpack_path]
     subprocess.check_call(cmd)
@@ -49,7 +50,7 @@ def install_kubernetes_components():
     services = ['kubelet', 'kube-proxy']
 
     for service in services:
-        unpacked = './files/kubernetes/{}'.format(service)
+        unpacked = '{}/files/kubernetes/{}'.format(charm_dir, service)
         app_path = '/usr/local/bin/{}'.format(service)
         install = ['install', '-v', unpacked, app_path]
         subprocess.call(install)

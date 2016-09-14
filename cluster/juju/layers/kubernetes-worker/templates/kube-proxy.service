@@ -1,7 +1,7 @@
 
 [Unit]
 Description=Kubernetes Kube-Proxy Server
-Documentation=https://github.com/GoogleCloudPlatform/kubernetes
+Documentation=http://kubernetes.io/docs/admin/kube-proxy/
 After=network.target
 
 [Service]

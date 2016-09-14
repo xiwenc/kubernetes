@@ -1,0 +1,3 @@
+tests: "[a-zA-Z0-9]*"
+packages:
+  - amulet
