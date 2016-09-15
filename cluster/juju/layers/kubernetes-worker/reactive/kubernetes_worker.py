@@ -58,6 +58,14 @@ def install_kubernetes_components():
     set_state('kubernetes.worker.bins.installed')
 
 
+@when('kubernetes.worker.bins.installed')
+def set_app_version():
+    ''' Declare the application version to juju '''
+    cmd = ['kubelet', '--version']
+    version = subprocess.check_output(cmd)
+    hookenv.application_version_set(version.split(b' ')[-1].rstrip())
+
+
 @when('sdn-plugin.available', 'docker.available')
 @when_not('sdn.configured')
 def container_sdn_setup(sdn):
@@ -93,8 +101,6 @@ def render_init_scripts(kube_api_endpoint):
 
     os.makedirs('/var/lib/kubelet', exist_ok=True)
     render('kubelet-kubeconfig', '/etc/kubernetes/kubelet/kubeconfig', context)
-    render('kube-proxy-kubeconfig', '/etc/kubernetes/kube-proxy/kubeconfig',
-            context)
     render('kube-default', '/etc/default/kube-default', context)
     render('kubelet.defaults', '/etc/default/kubelet', context)
     render('kube-proxy.service', '/lib/systemd/system/kube-proxy.service',
@@ -106,3 +112,4 @@ def render_init_scripts(kube_api_endpoint):
 
     host.service_restart('kubelet')
     host.service_restart('kube-proxy')
+    hookenv.status_set('active', 'Worker ready')

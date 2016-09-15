@@ -74,6 +74,13 @@ def setup_authentication():
     set_state('authentication.setup')
 
 
+@when('kube_master_components.installed')
+def set_app_version():
+    ''' Declare the application version to juju '''
+    version = check_output(['kube-apiserver', '--version'])
+    hookenv.application_version_set(version.split(b' ')[-1].rstrip())
+
+
 # @when('k8s.certificate.authority available')
 @when('etcd.available', 'kube_master_components.installed')
 def start_master(etcd):
@@ -90,6 +97,7 @@ def start_master(etcd):
     for service in services:
         if start_service(service):
             set_state('{0}.available'.format(service))
+    hookenv.open_port(8080)
     hookenv.status_set('active', 'Kubernetes master running.')
 
 
@@ -135,6 +143,9 @@ def launch_dns():
 # TODO: This needs a much better relationship name...
 @when('kube-api-endpoint.available')
 def push_service_data(kube_api):
+    ''' Send configuration to the load balancer, and close access to the
+    public interface '''
+    hookenv.close_port(8080)
     kube_api.configure(port=8080)
 
 
