@@ -24,7 +24,7 @@ def install():
     # Get the resource via resource_get
     archive = hookenv.resource_get('kubernetes')
     if not archive:
-        hookenv.status_set('blocked', 'Missing kubernetes binary package')
+        hookenv.status_set('blocked', 'Missing kubernetes resource')
         return
 
     hookenv.status_set('maintenance', 'Unpacking Kubernetes.')
@@ -75,7 +75,7 @@ def setup_authentication():
 
 
 # @when('k8s.certificate.authority available')
-@when('etcd.available')
+@when('etcd.available', 'kube_master_components.installed')
 def start_master(etcd):
     '''Run the Kubernetes master components.'''
     hookenv.status_set('maintenance',
@@ -93,7 +93,7 @@ def start_master(etcd):
     hookenv.status_set('active', 'Kubernetes master running.')
 
 
-@when('apiserver.available')
+@when('apiserver.available', 'kube_master_components.installed')
 @when_not('kube-dns.available')
 def launch_dns():
     '''Create the "kube-system" namespace, the kubedns resource controller, and
@@ -138,6 +138,7 @@ def push_service_data(kube_api):
     kube_api.configure(port=8080)
 
 
+@when('kube_master_components.installed')
 @when_not('kubernetes.dashboard.available')
 def launch_kubernetes_dashboard():
     ''' Launch the Kubernetes dashboard. If not enabled, attempt deletion '''

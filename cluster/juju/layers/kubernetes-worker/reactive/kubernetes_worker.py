@@ -37,7 +37,7 @@ def install_kubernetes_components():
     charm_dir = os.getenv('CHARM_DIR')
 
     if not kube_package:
-        hookenv.status_set('blocked', 'Missing kubernetes package')
+        hookenv.status_set('blocked', 'Missing kubernetes resource')
         return
 
     hookenv.status_set('maintenance', 'Unpacking kubernetes')
@@ -76,7 +76,7 @@ def container_sdn_setup(sdn):
     set_state('sdn.configured')
 
 
-@when('kube-api-endpoint.available')
+@when('kube-api-endpoint.available', 'kubernetes.worker.bins.installed')
 def render_init_scripts(kube_api_endpoint):
     ''' We have related to either an api server or a load balancer connected
     to the apiserver. Render the config files and prepare for launch '''
