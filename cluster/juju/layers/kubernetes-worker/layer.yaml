@@ -1,0 +1,7 @@
+includes:
+  - 'layer:basic'
+  - 'layer:docker'
+  - 'interface:http'
+  - 'interface:sdn-plugin'
+repo: https://github.com/kubernetes/kubernetes
+
