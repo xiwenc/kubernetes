@@ -3,5 +3,6 @@ includes:
   - 'layer:docker'
   - 'interface:http'
   - 'interface:sdn-plugin'
+  - 'interface:kube-dns'
 repo: https://github.com/kubernetes/kubernetes
 

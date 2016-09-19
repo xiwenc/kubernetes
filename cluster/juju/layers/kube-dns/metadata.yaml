@@ -1,0 +1,26 @@
+name: kube-dns
+summary: Provides cluster-level DNS for Kubernetes
+maintainers:
+    - Charles Butler <charles.butler@canonical.com>
+description: |
+  Deploys the kubernetes-dns module, and allows for rapid configuration of
+  cluster-level dns.
+tags:
+  - dns
+subordinate: true
+series:
+    - xenial
+provides:
+  cluster-dns:
+    interface: kube-dns
+requires:
+  host:
+    interface: juju-info
+    scope: container
+  kube-api:
+    interface: kube-api
+resources:
+    kube-dns:
+        type: file
+        filename: kube-dns
+        description: Uncompressed binary for kube-dns

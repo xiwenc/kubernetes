@@ -50,6 +50,15 @@ Set the IP range for the Kubernetes cluster. eg: 10.1.0.0/16
 
 The domain name to use for the Kubernetes cluster by the skydns service.
 
+# Additional Information
+
+## Kubedns
+
+Kubernetes DNS is handled via the kubedns addon. More information about
+this service can be obtained in the
+[Kubernetes DNS admin guide](http://kubernetes.io/docs/admin/dns/ )
+
+
 # Storage
 The kubernetes charm is built to handle multiple storage devices if the cloud
 provider works with

@@ -1,0 +1,7 @@
+#!/bin/bash
+
+set -ex
+
+kubectl cordon $(unit-get private-address)
+kubectl drain $(unit-get private-address) --force
+status-set 'waiting' 'Kubernetes unit paused'

@@ -4,4 +4,3 @@ includes:
   - 'interface:etcd'
   - 'interface:http'
   - 'interface:sdn-plugin'
-  - 'interface:kube-api'

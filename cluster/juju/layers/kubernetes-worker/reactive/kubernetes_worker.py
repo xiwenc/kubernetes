@@ -4,6 +4,7 @@ from charms.docker import DockerOpts
 from charmhelpers.core import hookenv
 from charmhelpers.core import host
 from charmhelpers.fetch import apt_install
+from charms.serveropts import ServerOpts
 from charms.templating.jinja2 import render
 
 import os
@@ -40,6 +41,14 @@ def install_kubernetes_components():
         hookenv.status_set('blocked', 'Missing kubernetes resource')
         return
 
+    # Handle null resource publication, we check if its filesize < 1mb
+    filesize = os.stat(kube_package).st_size
+    if filesize < 1000000:
+        hookenv.status_set('blocked', 'Missing kubernetes resource')
+        return
+
+
+
     hookenv.status_set('maintenance', 'Unpacking kubernetes')
 
     unpack_path = '{}/files/kubernetes'.format(charm_dir)
@@ -63,7 +72,7 @@ def set_app_version():
     ''' Declare the application version to juju '''
     cmd = ['kubelet', '--version']
     version = subprocess.check_output(cmd)
-    hookenv.application_version_set(version.split(b' ')[-1].rstrip())
+    hookenv.application_version_set(version.split(b' v')[-1].rstrip())
 
 
 @when('sdn-plugin.available', 'docker.available')
@@ -83,6 +92,19 @@ def container_sdn_setup(sdn):
     _reconfigure_docker_for_sdn()
     set_state('sdn.configured')
 
+@when('kubernetes.worker.bins.installed', 'kube-api-endpoint.available',
+      'kube-dns.available')
+def render_dns_scripts(kube_api, kube_dns):
+    ''' Re-render init config with DNS data '''
+    # Fetch the data on the wire
+    dns = kube_dns.details()
+    # Initialize a ServerOpts flag manager
+    opts = ServerOpts('kubelet')
+    # Append our flags + data to the options manager
+    opts.add('cluster-dns', '{0}:{1}'.format(dns['private-address'], dns['port']))
+    opts.add('cluster-domain', dns['domain'])
+    render_init_scripts(kube_api)
+
 
 @when('kube-api-endpoint.available', 'kubernetes.worker.bins.installed')
 def render_init_scripts(kube_api_endpoint):
@@ -98,6 +120,12 @@ def render_init_scripts(kube_api_endpoint):
     unit_name = os.getenv('JUJU_UNIT_NAME').replace('/', '-')
     context.update({'kube_api_endpoint': ','.join(hosts),
                     'JUJU_UNIT_NAME': unit_name})
+
+    # Iterate through the aggregated opts and append them
+    kubelet_opts = ServerOpts('kubelet')
+    context['kubelet_opts'] = kubelet_opts.to_s()
+    kube_proxy_opts = ServerOpts('kube-proxy')
+    context['kube_proxy_opts'] = kube_proxy_opts.to_s()
 
     os.makedirs('/var/lib/kubelet', exist_ok=True)
     render('kubelet-kubeconfig', '/etc/kubernetes/kubelet/kubeconfig', context)

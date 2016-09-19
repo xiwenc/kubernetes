@@ -9,7 +9,6 @@ from subprocess import check_output
 from subprocess import CalledProcessError
 
 from charms.reactive import remove_state
-from charms.reactive import is_state
 from charms.reactive import set_state
 from charms.reactive import when
 from charms.reactive import when_not
@@ -25,12 +24,6 @@ def install():
     # Get the resource via resource_get
     archive = hookenv.resource_get('kubernetes')
     if not archive:
-        hookenv.status_set('blocked', 'Missing kubernetes resource')
-        return
-
-    # Handle null resource publication, we check if its filesize < 1mb
-    filesize = os.stat(archive).st_size
-    if filesize < 1000000:
         hookenv.status_set('blocked', 'Missing kubernetes resource')
         return
 
@@ -76,8 +69,7 @@ def setup_authentication():
         setup_tokens(None, 'kube_proxy', 'kube_proxy')
     # Generate the default service account token key
     os.makedirs('/etc/kubernetes', exist_ok=True)
-    cmd = ['openssl', 'genrsa', '-out', '/etc/kubernetes/serviceaccount.key',
-           '2048']
+    cmd = ['openssl', 'genrsa', '-out', '/etc/kubernetes/serviceaccount.key', '2048']
     check_call(cmd)
     set_state('authentication.setup')
 
@@ -109,6 +101,45 @@ def start_master(etcd):
     hookenv.status_set('active', 'Kubernetes master running.')
 
 
+@when('apiserver.available', 'kube_master_components.installed')
+@when_not('kube-dns.available')
+def launch_dns():
+    '''Create the "kube-system" namespace, the kubedns resource controller, and
+    the kubedns service. '''
+    hookenv.status_set('maintenance',
+                       'Rendering the Kubernetes DNS files.')
+    # Render the DNS files with the cider information.
+    render_files()
+    # Run a command to check if the apiserver is responding.
+    return_code = call(split('kubectl cluster-info'))
+    if return_code != 0:
+        hookenv.log('kubectl command failed, waiting for apiserver to start.')
+        remove_state('kubedns.available')
+        # Return without setting kube-dns.available so this method will retry.
+        return
+    # Check for the "kube-system" namespace.
+    return_code = call(split('kubectl get namespace kube-system'))
+    if return_code != 0:
+        # Create the kube-system namespace that is used by the kubedns files.
+        check_call(split('kubectl create namespace kube-system'))
+    manifests_dir = os.path.join(hookenv.charm_dir(), 'files/manifests')
+    # Check for the kubedns replication controller.
+    get = 'kubectl get -f {0}/kubedns-rc.yaml'.format(manifests_dir)
+    return_code = call(split(get))
+    if return_code != 0:
+        # Create the kubedns replication controller from the rendered file.
+        create = 'kubectl create -f {0}/kubedns-rc.yaml'.format(manifests_dir)
+        check_call(split(create))
+    # Check for the kubedns service.
+    get = 'kubectl get -f {0}/kubedns-svc.yaml'.format(manifests_dir)
+    return_code = call(split(get))
+    if return_code != 0:
+        # Create the kubedns service from the rendered file.
+        create = 'kubectl create -f {0}/kubedns-svc.yaml'.format(manifests_dir)
+        check_call(split(create))
+    set_state('kube-dns.available')
+
+
 # TODO: This needs a much better relationship name...
 @when('kube-api-endpoint.available')
 def push_service_data(kube_api):
@@ -117,26 +148,12 @@ def push_service_data(kube_api):
     hookenv.close_port(8080)
     kube_api.configure(port=8080)
 
-@when('kube-api.connected')
-def push_api_data(kube_api):
-    ''' Send configuration to remote consumer'''
-    data = {'private_address': hookenv.unit_private_ip()}
-
-    # TODO Replace with actual TLS interface code
-    if not is_state('ca.connected'):
-        data['tls'] = False
-        data['port'] = 8080
-
-    kube_api.set_api_credentials(data['private_address'], data['port'],
-                                 data['tls'])
-
 
 @when('kube_master_components.installed')
 @when_not('kubernetes.dashboard.available')
 def launch_kubernetes_dashboard():
     ''' Launch the Kubernetes dashboard. If not enabled, attempt deletion '''
     if hookenv.config('dashboard'):
-        # TODO - make this self contained
         dashboard_manifest = 'https://rawgit.com/kubernetes/dashboard/master/src/deploy/kubernetes-dashboard.yaml' # noqa
         cmd = ['kubectl', 'create', '-f', dashboard_manifest]
         call(cmd)
@@ -168,13 +185,39 @@ def arch():
 def render_files(reldata=None):
     '''Use jinja templating to render the docker-compose.yml and master.json
     file to contain the dynamic data for the configuration files.'''
-    context = set_context(reldata)
+    context = {}
+    # Load the context data with SDN data.
+    context.update(gather_sdn_data())
+    # Add the charm configuration data to the context.
+    context.update(hookenv.config())
+    # Add the relation data when it is not empty.
+    if reldata:
+        connection_string = reldata.get_connection_string()
+        # Define where the etcd tls files will be kept.
+        etcd_dir = '/etc/ssl/etcd'
+        # Create paths to the etcd client ca, key, and cert file locations.
+        ca = os.path.join(etcd_dir, 'client-ca.pem')
+        key = os.path.join(etcd_dir, 'client-key.pem')
+        cert = os.path.join(etcd_dir, 'client-cert.pem')
+        # Save the client credentials (in relation data) to the paths provided.
+        reldata.save_client_credentials(key, cert, ca)
+        # Update the context so the template has the etcd information.
+        context.update({'etcd_dir': etcd_dir,
+                        'connection_string': connection_string,
+                        'etcd_ca': ca,
+                        'etcd_key': key,
+                        'etcd_cert': cert})
 
     charm_dir = hookenv.charm_dir()
     rendered_manifest_dir = os.path.join(charm_dir, 'files/manifests')
     if not os.path.exists(rendered_manifest_dir):
         os.makedirs(rendered_manifest_dir)
 
+    # Update the context with extra values, arch, manifest dir, and private IP.
+    context.update({'arch': arch(),
+                    'master_address': hookenv.unit_get('private-address'),
+                    'public_address': hookenv.unit_get('public-address'),
+                    'private_address': hookenv.unit_get('private-address')})
 
     # Render the configuration files that contains parameters for
     # the apiserver, scheduler, and controller-manager
@@ -182,6 +225,14 @@ def render_files(reldata=None):
     render_service('kube-controller-manager', context)
     render_service('kube-scheduler', context)
 
+    # Source: ...cluster/addons/dns/skydns-svc.yaml.in
+    target = os.path.join(rendered_manifest_dir, 'kubedns-svc.yaml')
+    # Render files/kubernetes/kubedns-svc.yaml for the DNS service.
+    render('kubedns-svc.yaml', target, context)
+    # Source: ...cluster/addons/dns/skydns-rc.yaml.in
+    target = os.path.join(rendered_manifest_dir, 'kubedns-rc.yaml')
+    # Render files/kubernetes/kubedns-rc.yaml for the DNS pod.
+    render('kubedns-rc.yaml', target, context)
     # when files change on disk, we need to inform systemd of the changes
     try:
         check_call(['systemctl', 'daemon-reload'])
@@ -262,38 +313,6 @@ def start_service(service_name):
     return_code = call(split(start))
     return return_code == 0
 
-
-def set_context(reldata=None):
-    ''' Assemble the dictionary of data for rendering templates '''
-    context = {}
-    # Load the context data with SDN data.
-    context.update(gather_sdn_data())
-    # Add the charm configuration data to the context.
-    context.update(hookenv.config())
-    # Add the relation data when it is not empty.
-    if reldata:
-        connection_string = reldata.get_connection_string()
-        # Define where the etcd tls files will be kept.
-        etcd_dir = '/etc/ssl/etcd'
-        # Create paths to the etcd client ca, key, and cert file locations.
-        ca = os.path.join(etcd_dir, 'client-ca.pem')
-        key = os.path.join(etcd_dir, 'client-key.pem')
-        cert = os.path.join(etcd_dir, 'client-cert.pem')
-        # Save the client credentials (in relation data) to the paths provided.
-        reldata.save_client_credentials(key, cert, ca)
-        # Update the context so the template has the etcd information.
-        context.update({'etcd_dir': etcd_dir,
-                        'connection_string': connection_string,
-                        'etcd_ca': ca,
-                        'etcd_key': key,
-                        'etcd_cert': cert})
-
-    # Update the context with extra values, arch, manifest dir, and private IP.
-    context.update({'arch': arch(),
-                    'master_address': hookenv.unit_get('private-address'),
-                    'public_address': hookenv.unit_get('public-address'),
-                    'private_address': hookenv.unit_get('private-address')})
-    return context
 
 def render_service(service_name, context):
     '''Render the systemd service by name.'''

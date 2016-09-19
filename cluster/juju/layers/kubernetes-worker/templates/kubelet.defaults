@@ -13,4 +13,4 @@ KUBELET_HOSTNAME="--hostname-override={{ JUJU_UNIT_NAME }}"
 KUBELET_API_SERVER="--api-servers={{ kube_api_endpoint }}"
 
 # Add your own!
-KUBELET_ARGS=""
+KUBELET_ARGS="{{ kubelet_opts }}"
