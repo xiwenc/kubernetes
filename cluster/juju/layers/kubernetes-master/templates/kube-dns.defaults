@@ -1,3 +1,0 @@
-# THIS FILE IS MANAGED BY JUJU. HAND EDITS WILL NOT PERSIST
-
-DEAMON_ARGS='--kube-master-url http://127.0.0.1:8080 --domain {{ domain }}'

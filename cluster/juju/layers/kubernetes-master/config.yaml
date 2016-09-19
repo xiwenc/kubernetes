@@ -4,18 +4,6 @@ options:
     default: ""
     description: |
       This config option was deprecated in favor of the binary delivery pattern.
-  cidr:
-    type: string
-    default: 10.1.0.0/16
-    description: |
-      Network CIDR to assign to Kubernetes service groups. This must not
-      overlap with any IP ranges assigned to nodes for pods.
-  dns_domain:
-    type: string
-    default: cluster.local
-    description: |
-      The domain name to use for the Kubernetes cluster by the
-      skydns service.
   dashboard:
     type: boolean
     default: True
