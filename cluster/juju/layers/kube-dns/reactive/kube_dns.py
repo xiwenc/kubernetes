@@ -33,7 +33,7 @@ def render_kubedns_templates(kube_api):
     else:
         creds = kube_api.get_basic_credentials()
         url = "http://{0}:{1}".format(creds['private_address'], creds['port'])
-        context.update({'kube-master_url': url})
+        context.update({'kube_master_url': url})
 
     render('kube-dns.service', '/lib/systemd/system/kube-dns.service',
            context)
