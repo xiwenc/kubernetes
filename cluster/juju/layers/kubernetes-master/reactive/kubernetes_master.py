@@ -375,7 +375,7 @@ def render_files():
     render_service('kube-scheduler', context)
 
     # explicitly render the generic defaults file
-    render('config.defaults', '/etc/default/kube-defaults', context)
+    render('kube-defaults.defaults', '/etc/default/kube-defaults', context)
 
     # when files change on disk, we need to inform systemd of the changes
     try:
