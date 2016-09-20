@@ -1,5 +1,0 @@
-includes:
-    - 'layer:basic'
-    - 'interface:juju-info'
-    - 'interface:kube-api'
-    - 'interface:kube-dns'

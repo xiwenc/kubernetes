@@ -1,9 +1,0 @@
-options:
-  domain:
-    type: string
-    default: "cluster.local"
-    description: "Default domain for cluster dns"
-  port:
-    type: int
-    default: 53
-    description: "Port to bind for DNS requests"
