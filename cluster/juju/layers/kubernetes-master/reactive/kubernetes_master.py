@@ -207,6 +207,7 @@ def launch_kubernetes_dashboard():
 def start_kube_dns(sdn_plugin):
     ''' State guard to starting DNS '''
     context = prepare_sdn_context(sdn_plugin)
+    context['arch'] = arch()
     render('kubedns-rc.yaml', '/etc/kubernetes/addons/kubedns-rc.yaml',
            context)
     render('kubedns-svc.yaml', '/etc/kubernetes/addons/kubedns-svc.yaml',
@@ -228,7 +229,7 @@ def launch_dns():
     return_code = call(split('kubectl cluster-info'))
     if return_code != 0:
         hookenv.log('kubectl command failed, waiting for apiserver to start.')
-        remove_state('kubedns.available')
+        remove_state('kube-dns.available')
         # Return without setting kube-dns.available so this method will retry.
         return
     # Check for the "kube-system" namespace.

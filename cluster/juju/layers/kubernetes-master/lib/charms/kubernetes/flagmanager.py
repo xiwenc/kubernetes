@@ -3,7 +3,7 @@ from charmhelpers.core import unitdata
 
 class FlagManager:
     '''
-    ServerOptsManager - A Python class for managing the flags to pass to an
+    FlagManager - A Python class for managing the flags to pass to an
     application without remembering what's been set previously.
 
     This is a blind class assuming the operator knows what they are doing.
