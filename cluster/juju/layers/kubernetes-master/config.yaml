@@ -1,10 +1,9 @@
 options:
-  version:
-    type: string
-    default: ""
-    description: |
-      This config option was deprecated in favor of the binary delivery pattern.
   dashboard:
     type: boolean
     default: True
     description: Deploy the Kubernetes Dashboard
+  dns_domain:
+    type: string
+    default: cluster.local
+    description: The local domain for cluster dns

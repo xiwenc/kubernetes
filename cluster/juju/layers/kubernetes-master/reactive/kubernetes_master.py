@@ -8,15 +8,22 @@ from subprocess import check_call
 from subprocess import check_output
 from subprocess import CalledProcessError
 
-# from charms.reactive import remove_state
+from charms.reactive import hook
 from charms.reactive import is_state
+from charms.reactive import remove_state
 from charms.reactive import set_state
 from charms.reactive import when
+from charms.reactive import when_any
 from charms.reactive import when_not
-from charms.serveropts import FlagManager
+from charms.kubernetes.flagmanager import FlagManager
 
 from charmhelpers.core import hookenv
 from charmhelpers.core.templating import render
+
+
+@hook('upgrade-charm')
+def reset_states_for_delivery():
+    remove_state('kube_master_components.installed')
 
 
 @when_not('kube_master_components.installed')
@@ -66,6 +73,8 @@ def install():
 def setup_authentication():
     '''Setup basic authentication and token access for the cluster.'''
     api_opts = FlagManager('kube-apiserver')
+    controller_opts = FlagManager('kube-controller-manager')
+
     api_opts.add('--basic-auth-file', '/srv/kubernetes/basic_auth.csv')
     api_opts.add('--token-auth-file', '/srv/kubernetes/known_tokens.csv')
     hookenv.status_set('maintenance', 'Rendering authentication templates.')
@@ -82,6 +91,11 @@ def setup_authentication():
     cmd = ['openssl', 'genrsa', '-out', '/etc/kubernetes/serviceaccount.key',
            '2048']
     check_call(cmd)
+    api_opts.add('--service-account-key-file',
+                 '/etc/kubernetes/serviceaccount.key')
+    controller_opts.add('--service-account-private-key-file',
+                        '/etc/kubernetes/serviceaccount.key')
+
     set_state('authentication.setup')
 
 
@@ -89,7 +103,14 @@ def setup_authentication():
 def set_app_version():
     ''' Declare the application version to juju '''
     version = check_output(['kube-apiserver', '--version'])
-    hookenv.application_version_set(version.split(b' ')[-1].rstrip())
+    hookenv.application_version_set(version.split(b' v')[-1].rstrip())
+
+
+@when('kube-dns.available', 'kube-sdn.configured',
+      'kube_master_components.installed')
+def ready_messaging():
+    ''' Signal at the end of the run that we are running. '''
+    hookenv.status_set('active', "Kubernetes master running.")
 
 
 @when('etcd.available', 'kube_master_components.installed',
@@ -110,7 +131,14 @@ def start_master(etcd):
         if start_service(service):
             set_state('{0}.available'.format(service))
     hookenv.open_port(8080)
-    hookenv.status_set('active', 'Kubernetes master running.')
+    hookenv.status_set('active', 'Kubernetes master services ready.')
+
+
+@when('kube-dns.available', 'cluster-dns.connected', 'sdn-plugin.available')
+def send_cluster_dns_detail(cluster_dns, sdn_plugin):
+    details = sdn_plugin.get_sdn_config()
+    sdn_ip = get_dns_ip(details['cidr'])
+    cluster_dns.set_dns_info(53, hookenv.config('dns_domain'), sdn_ip)
 
 
 # TODO: This needs a much better relationship name...
@@ -153,7 +181,7 @@ def launch_kubernetes_dashboard():
     ''' Launch the Kubernetes dashboard. If not enabled, attempt deletion '''
     if hookenv.config('dashboard'):
         # TODO - make this self contained
-        dashboard_manifest = 'https://rawgit.com/kubernetes/dashboard/master/src/deploy/kubernetes-dashboard.yaml' # noqa
+        dashboard_manifest = 'https://rawgit.com/kubernetes/dashboard/master/src/deploy/kubernetes-dashboard.yaml'  # noqa
         cmd = ['kubectl', 'create', '-f', dashboard_manifest]
         call(cmd)
         set_state('kubernetes.dashboard.available')
@@ -164,6 +192,58 @@ def launch_kubernetes_dashboard():
             call(cmd)
         except CalledProcessError:
             pass
+
+
+@when('kube_master_components.installed', 'kube-sdn.configured',
+      'sdn-plugin.available')
+@when_not('kube-dns.started')
+def start_kube_dns(sdn_plugin):
+    ''' State guard to starting DNS '''
+    context = prepare_sdn_context(sdn_plugin)
+    render('kubedns-rc.yaml', '/etc/kubernetes/addons/kubedns-rc.yaml',
+           context)
+    render('kubedns-svc.yaml', '/etc/kubernetes/addons/kubedns-svc.yaml',
+           context)
+    # This should be auto-loaded by the addon manager, but it doesnt appear
+    # to do so.
+    launch_dns()
+    set_state('kube-dns.available')
+
+
+def launch_dns():
+    '''Create the "kube-system" namespace, the kubedns resource controller, and
+    the kubedns service. '''
+    hookenv.status_set('maintenance',
+                       'Rendering the Kubernetes DNS files.')
+    # Render the DNS files with the cider information.
+    render_files()
+    # Run a command to check if the apiserver is responding.
+    return_code = call(split('kubectl cluster-info'))
+    if return_code != 0:
+        hookenv.log('kubectl command failed, waiting for apiserver to start.')
+        remove_state('kubedns.available')
+        # Return without setting kube-dns.available so this method will retry.
+        return
+    # Check for the "kube-system" namespace.
+    return_code = call(split('kubectl get namespace kube-system'))
+    if return_code != 0:
+        # Create the kube-system namespace that is used by the kubedns files.
+        check_call(split('kubectl create namespace kube-system'))
+    addon_dir = '/etc/kubernetes/addons'
+    # Check for the kubedns replication controller.
+    get = 'kubectl get -f {0}/kubedns-rc.yaml'.format(addon_dir)
+    return_code = call(split(get))
+    if return_code != 0:
+        # Create the kubedns replication controller from the rendered file.
+        create = 'kubectl create -f {0}/kubedns-rc.yaml'.format(addon_dir)
+        check_call(split(create))
+    # Check for the kubedns service.
+    get = 'kubectl get -f {0}/kubedns-svc.yaml'.format(addon_dir)
+    return_code = call(split(get))
+    if return_code != 0:
+        # Create the kubedns service from the rendered file.
+        create = 'kubectl create -f {0}/kubedns-svc.yaml'.format(addon_dir)
+        check_call(split(create))
 
 
 def arch():
@@ -179,6 +259,14 @@ def arch():
         hookenv.status_set('blocked', message)
         raise Exception(message)
     return architecture
+
+
+def get_dns_ip(cidr):
+    '''Get an IP address for the DNS server on the provided cidr.'''
+    # Remove the range from the cidr.
+    ip = cidr.split('/')[0]
+    # Take the last octet off the IP address and replace it with 10.
+    return '.'.join(ip.split('.')[0:-1]) + '.10'
 
 
 def handle_etcd_relation(reldata):
@@ -198,20 +286,41 @@ def handle_etcd_relation(reldata):
     api_opts = FlagManager('kube-apiserver')
 
     # Never use stale data, always prefer whats coming in during context
-    # building. if its stale, its because juju is stale
-    if api_opts.data.get('--etcd-servers-strict') or api_opts.data.get('--etcd-servers'):
+    # building. if its stale, its because whats in unitdata is stale
+    data = api_opts.data
+    if data.get('--etcd-servers-strict') or data.get('--etcd-servers'):
         api_opts.destroy('--etcd-cafile')
         api_opts.destroy('--etcd-keyfile')
         api_opts.destroy('--etcd-certfile')
         api_opts.destroy('--etcd-servers', strict=True)
         api_opts.destroy('--etcd-servers')
 
-
     # Set the apiserver flags in the options manager
     api_opts.add('--etcd-cafile', ca)
     api_opts.add('--etcd-keyfile', key)
     api_opts.add('--etcd-certfile', cert)
     api_opts.add('--etcd-servers', connection_string, strict=True)
+
+
+def prepare_sdn_context(sdn_plugin=None):
+    '''Get the Software Defined Network (SDN) information and return it as a
+    dictionary. '''
+    sdn_data = {}
+    # The dictionary named 'pillar' is a construct of the k8s template files.
+    pillar = {}
+    # SDN Providers pass data via the sdn-plugin interface
+    # Ideally the DNS address should come from the sdn cidr, or subnet.
+    plugin_data = sdn_plugin.get_sdn_config()
+    if plugin_data.get('subnet'):
+        # Generate the DNS ip address on the SDN cidr (this is desired).
+        pillar['dns_server'] = get_dns_ip(plugin_data['subnet'])
+    # The pillar['dns_server'] value is used the kubedns-svc.yaml file.
+    pillar['dns_replicas'] = 1
+    # The pillar['dns_domain'] value is used in the kubedns-rc.yaml
+    pillar['dns_domain'] = hookenv.config('dns_domain')
+    # Use a 'pillar' dictionary so we can reuse the upstream kubedns templates.
+    sdn_data['pillar'] = pillar
+    return sdn_data
 
 
 def render_files():
@@ -243,9 +352,8 @@ def render_files():
 
     scheduler_opts.add('--v', '2')
 
+    # Default to 3 minute resync. TODO: Make this configureable?
     controller_opts.add('--min-resync-period', '3m')
-    controller_opts.add('--service-account-private-key-file',
-                        '/etc/kubernetes.serviceaccount.key')
     controller_opts.add('--v', '2')
 
     context.update({'kube_apiserver_flags': api_opts.to_s(),

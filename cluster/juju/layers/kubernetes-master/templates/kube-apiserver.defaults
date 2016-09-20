@@ -14,7 +14,9 @@ KUBE_API_PORT="--port=8080"
 KUBELET_PORT="--kubelet-port=10250"
 
 # default admission control policies
-KUBE_ADMISSION_CONTROL="--admission-control=NamespaceLifecycle,LimitRanger,SecurityContextDeny,ServiceAccount,ResourceQuota"
+# TODO: This is the default when we are using TLS
+#KUBE_ADMISSION_CONTROL="--admission-control=NamespaceLifecycle,LimitRanger,SecurityContextDeny,ServiceAccount,ResourceQuota"
+KUBE_ADMISSION_CONTROL="--admission-control=NamespaceLifecycle,LimitRanger,SecurityContextDeny,ResourceQuota"
 
 # Add your own!
 KUBE_API_ARGS="{{ kube_apiserver_flags }}"

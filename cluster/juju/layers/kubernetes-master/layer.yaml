@@ -5,3 +5,4 @@ includes:
   - 'interface:http'
   - 'interface:sdn-plugin'
   - 'interface:kube-api'
+  - 'interface:kube-dns'
