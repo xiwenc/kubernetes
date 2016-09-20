@@ -22,6 +22,10 @@ provides:
   sdn-plugin:
     interface: sdn-plugin
     scope: container
+  kube-api:
+    interface: kube-api
+  cluster-dns:
+    interface: kube-dns
 requires:
   etcd:
     interface: etcd

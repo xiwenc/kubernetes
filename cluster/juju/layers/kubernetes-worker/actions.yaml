@@ -1,0 +1,6 @@
+pause:
+    description: |
+      Cordon the unit, draining all active workloads.
+resume:
+    description: |
+      UnCordon the unit, enabling workload scheduling.

@@ -21,6 +21,8 @@ provides:
 requires:
   kube-api-endpoint:
     interface: http
+  kube-dns:
+    interface: kube-dns
 resources:
   kubernetes:
     type: file

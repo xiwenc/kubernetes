@@ -1,0 +1,3 @@
+includes:
+  - layer:nginx
+repo: https://github.com/juju-solutions/kubernetes-load-balancer
