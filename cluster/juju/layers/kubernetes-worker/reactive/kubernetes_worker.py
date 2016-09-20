@@ -42,24 +42,33 @@ def remove_installed_state():
 @when_not('kubernetes.worker.bins.installed')
 def install_kubernetes_components():
     ''' Unpack the kubernetes worker binaries '''
-    kube_package = hookenv.resource_get('kubernetes')
     charm_dir = os.getenv('CHARM_DIR')
 
-    if not kube_package:
+    # Get the resource via resource_get
+    try:
+        archive = hookenv.resource_get('kubernetes')
+    except Exception:
+        message = 'Error fetching the kubernetes resource'
+        hookenv.log(message)
+        hookenv.status_set('blocked', message)
+        return
+
+    if not archive:
+        hookenv.log('Missing kubernetes resource')
         hookenv.status_set('blocked', 'Missing kubernetes resource')
         return
 
-    # Handle null resource publication, we check if its filesize < 1mb
-    filesize = os.stat(kube_package).st_size
+    # Handle null resource publication, we check if filesize < 1mb
+    filesize = os.stat(archive).st_size
     if filesize < 1000000:
-        hookenv.status_set('blocked', 'Missing kubernetes resource')
+        hookenv.status_set('blocked', 'Incomplete kubernetes resource')
         return
 
     hookenv.status_set('maintenance', 'Unpacking kubernetes')
 
     unpack_path = '{}/files/kubernetes'.format(charm_dir)
     os.makedirs(unpack_path, exist_ok=True)
-    cmd = ['tar', 'xfz', kube_package, '-C', unpack_path]
+    cmd = ['tar', 'xfz', archive, '-C', unpack_path]
     subprocess.check_call(cmd)
 
     services = ['kubelet', 'kube-proxy']

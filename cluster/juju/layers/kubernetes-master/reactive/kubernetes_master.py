@@ -13,7 +13,6 @@ from charms.reactive import is_state
 from charms.reactive import remove_state
 from charms.reactive import set_state
 from charms.reactive import when
-from charms.reactive import when_any
 from charms.reactive import when_not
 from charms.kubernetes.flagmanager import FlagManager
 
@@ -30,15 +29,23 @@ def reset_states_for_delivery():
 def install():
     '''Unpack the Kubernetes master binary files.'''
     # Get the resource via resource_get
-    archive = hookenv.resource_get('kubernetes')
+    try:
+        archive = hookenv.resource_get('kubernetes')
+    except Exception:
+        message = 'Error fetching the kubernetes resource'
+        hookenv.log(message)
+        hookenv.status_set('blocked', message)
+        return
+
     if not archive:
+        hookenv.log('Missing kubernetes resource')
         hookenv.status_set('blocked', 'Missing kubernetes resource')
         return
 
-    # Handle null resource publication, we check if its filesize < 1mb
+    # Handle null resource publication, we check if filesize < 1mb
     filesize = os.stat(archive).st_size
     if filesize < 1000000:
-        hookenv.status_set('blocked', 'Missing kubernetes resource')
+        hookenv.status_set('blocked', 'Incomplete kubernetes resource')
         return
 
     hookenv.status_set('maintenance', 'Unpacking Kubernetes.')
@@ -196,7 +203,7 @@ def launch_kubernetes_dashboard():
 
 @when('kube_master_components.installed', 'kube-sdn.configured',
       'sdn-plugin.available')
-@when_not('kube-dns.started')
+@when_not('kube-dns.available')
 def start_kube_dns(sdn_plugin):
     ''' State guard to starting DNS '''
     context = prepare_sdn_context(sdn_plugin)
