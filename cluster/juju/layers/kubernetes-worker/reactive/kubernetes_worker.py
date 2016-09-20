@@ -1,5 +1,8 @@
-
-from charms.reactive import when, when_not, set_state
+from charms.reactive import hook
+from charms.reactive import remove_state
+from charms.reactive import set_state
+from charms.reactive import when
+from charms.reactive import when_not
 from charms.docker import DockerOpts
 from charmhelpers.core import hookenv
 from charmhelpers.core import host
@@ -30,6 +33,11 @@ def _reconfigure_docker_for_sdn():
     set_state('docker.restart')
 
 
+@hook('upgrade-charm')
+def remove_installed_state():
+    remove_state('kubernetes.worker.bins.installed')
+
+
 @when('docker.available')
 @when_not('kubernetes.worker.bins.installed')
 def install_kubernetes_components():
@@ -46,8 +54,6 @@ def install_kubernetes_components():
     if filesize < 1000000:
         hookenv.status_set('blocked', 'Missing kubernetes resource')
         return
-
-
 
     hookenv.status_set('maintenance', 'Unpacking kubernetes')
 
@@ -92,6 +98,7 @@ def container_sdn_setup(sdn):
     _reconfigure_docker_for_sdn()
     set_state('sdn.configured')
 
+
 @when('kubernetes.worker.bins.installed', 'kube-api-endpoint.available',
       'kube-dns.available')
 def render_dns_scripts(kube_api, kube_dns):
@@ -101,7 +108,7 @@ def render_dns_scripts(kube_api, kube_dns):
     # Initialize a ServerOpts flag manager
     opts = ServerOpts('kubelet')
     # Append our flags + data to the options manager
-    opts.add('cluster-dns', '{0}:{1}'.format(dns['private-address'], dns['port']))
+    opts.add('cluster-dns', '{0}:{1}'.format(dns['sdn-ip'], dns['port']))
     opts.add('cluster-domain', dns['domain'])
     render_init_scripts(kube_api)
 
@@ -128,7 +135,7 @@ def render_init_scripts(kube_api_endpoint):
     context['kube_proxy_opts'] = kube_proxy_opts.to_s()
 
     os.makedirs('/var/lib/kubelet', exist_ok=True)
-    render('kubelet-kubeconfig', '/etc/kubernetes/kubelet/kubeconfig', context)
+    render('kubelet-kubeconfig', '/etc/kubernetes/kubelet.config', context)
     render('kube-default', '/etc/default/kube-default', context)
     render('kubelet.defaults', '/etc/default/kubelet', context)
     render('kube-proxy.service', '/lib/systemd/system/kube-proxy.service',
