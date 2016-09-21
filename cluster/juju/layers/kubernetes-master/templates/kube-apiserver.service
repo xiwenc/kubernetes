@@ -11,7 +11,6 @@ ExecStart=/usr/local/bin/kube-apiserver \
 	    $KUBE_LOG_LEVEL \
 	    $KUBE_API_ADDRESS \
 	    $KUBE_API_PORT \
-	    $KUBELET_PORT \
 	    $KUBE_ALLOW_PRIV \
 	    $KUBE_ADMISSION_CONTROL \
 	    $KUBE_API_ARGS
