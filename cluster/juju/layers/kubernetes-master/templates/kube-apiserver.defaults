@@ -5,20 +5,13 @@
 #
 
 # The address on the local server to listen to.
-KUBE_API_ADDRESS="--insecure-bind-address=0.0.0.0"
+KUBE_API_ADDRESS="--insecure-bind-address=127.0.0.1"
 
 # The port on the local server to listen on.
-KUBE_API_PORT="--port=8080"
-
-# Port minions listen on
-KUBELET_PORT="--kubelet-port=10250"
+KUBE_API_PORT="--insecure-port=8080"
 
 # default admission control policies
-# TODO: This is the default when we are using TLS
-#KUBE_ADMISSION_CONTROL="--admission-control=NamespaceLifecycle,LimitRanger,SecurityContextDeny,ServiceAccount,ResourceQuota"
-KUBE_ADMISSION_CONTROL="--admission-control=NamespaceLifecycle,LimitRanger,SecurityContextDeny,ResourceQuota"
+KUBE_ADMISSION_CONTROL="--admission-control=NamespaceLifecycle,LimitRanger,SecurityContextDeny,ServiceAccount,ResourceQuota"
 
 # Add your own!
 KUBE_API_ARGS="{{ kube_apiserver_flags }}"
-
-"

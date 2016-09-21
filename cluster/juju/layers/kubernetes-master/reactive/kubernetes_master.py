@@ -1,4 +1,5 @@
 import os
+import socket
 import string
 import random
 
@@ -8,8 +9,9 @@ from subprocess import check_call
 from subprocess import check_output
 from subprocess import CalledProcessError
 
+from charms import layer
+
 from charms.reactive import hook
-from charms.reactive import is_state
 from charms.reactive import remove_state
 from charms.reactive import set_state
 from charms.reactive import when
@@ -17,11 +19,19 @@ from charms.reactive import when_not
 from charms.kubernetes.flagmanager import FlagManager
 
 from charmhelpers.core import hookenv
+from charmhelpers.core import host
 from charmhelpers.core.templating import render
 
 
 @hook('upgrade-charm')
 def reset_states_for_delivery():
+    '''An upgrade charm event was triggered by Juju, react to that here.'''
+    services = ['kube-apiserver',
+                'kube-controller-manager',
+                'kube-scheduler']
+    for service in services:
+        host.service_stop(service)
+    remove_state('kube_master_components.started')
     remove_state('kube_master_components.installed')
 
 
@@ -121,8 +131,9 @@ def ready_messaging():
 
 
 @when('etcd.available', 'kube_master_components.installed',
-      'kube-sdn.configured')
-def start_master(etcd):
+      'kube-sdn.configured', 'certificates.server.cert.available')
+@when_not('kube_master_components.started')
+def start_master(etcd, tls):
     '''Run the Kubernetes master components.'''
     hookenv.status_set('maintenance',
                        'Rendering the Kubernetes master systemd files.')
@@ -135,10 +146,10 @@ def start_master(etcd):
                 'kube-controller-manager',
                 'kube-scheduler']
     for service in services:
-        if start_service(service):
-            set_state('{0}.available'.format(service))
-    hookenv.open_port(8080)
+        host.service_start(service)
+    hookenv.open_port(6443)
     hookenv.status_set('active', 'Kubernetes master services ready.')
+    set_state('kube_master_components.started')
 
 
 @when('kube-dns.available', 'cluster-dns.connected', 'sdn-plugin.available')
@@ -148,27 +159,49 @@ def send_cluster_dns_detail(cluster_dns, sdn_plugin):
     cluster_dns.set_dns_info(53, hookenv.config('dns_domain'), sdn_ip)
 
 
-# TODO: This needs a much better relationship name...
 @when('kube-api-endpoint.available')
 def push_service_data(kube_api):
     ''' Send configuration to the load balancer, and close access to the
     public interface '''
-    hookenv.close_port(8080)
-    kube_api.configure(port=8080)
+    kube_api.configure(port=6443)
+
+
+@when('certificates.available', 'sdn-plugin.available')
+def send_data(tls, sdn_plugin):
+    '''Send the data that is required to create a server certificate for
+    this server.'''
+    # Use the public ip of this unit as the Common Name for the certificate.
+    common_name = hookenv.unit_public_ip()
+    # Get the SDN cidr from the relation object.
+    sdn_cidr = sdn_plugin.get_sdn_config().get('cidr')
+    # Get the SDN gateway based on the cidr address.
+    sdn_ip = get_sdn_ip(sdn_cidr)
+    domain = hookenv.config('dns_domain')
+    # Create SANs that the tls layer will add to the server cert.
+    sans = [
+        hookenv.unit_public_ip(),
+        hookenv.unit_private_ip(),
+        socket.gethostname(),
+        sdn_ip,
+        'kubernetes',
+        'kubernetes.{0}'.format(domain),
+        'kubernetes.default',
+        'kubernetes.default.svc',
+        'kubernetes.default.svc.{0}'.format(domain)
+    ]
+    # Create a path safe name by removing path characters from the unit name.
+    certificate_name = hookenv.local_unit().replace('/', '_')
+    # Request a server cert with this information.
+    tls.request_server_cert(common_name, sans, certificate_name)
 
 
 @when('kube-api.connected')
 def push_api_data(kube_api):
-    ''' Send configuration to remote consumer'''
-    data = {'private_address': hookenv.unit_private_ip()}
-
-    # TODO Replace with actual TLS interface code
-    if not is_state('ca.connected'):
-        data['tls'] = False
-        data['port'] = 8080
-
-    kube_api.set_api_credentials(data['private_address'], data['port'],
-                                 data['tls'])
+    ''' Send configuration to remote consumer.'''
+    # Since all relations already have the private ip address, only
+    # send the port on the relation object to all consumers.
+    # The kubernetes api-server uses 6443 for the default secure port.
+    kube_api.set_api_port('6443')
 
 
 @when('kube_master_components.installed', 'sdn-plugin.available')
@@ -277,6 +310,14 @@ def get_dns_ip(cidr):
     return '.'.join(ip.split('.')[0:-1]) + '.10'
 
 
+def get_sdn_ip(cidr):
+    '''Get the IP address for the SDN gateway based on the provided cidr.'''
+    # Remove the range from the cidr.
+    ip = cidr.split('/')[0]
+    # Remove the last octet and replace it with 1.
+    return '.'.join(ip.split('.')[0:-1]) + '.1'
+
+
 def handle_etcd_relation(reldata):
     ''' Save the client credentials and set appropriate daemon flags when
     etcd declares itself as available'''
@@ -345,24 +386,30 @@ def render_files():
                     'private_address': hookenv.unit_get('private-address')})
 
     charm_dir = hookenv.charm_dir()
-    rendered_manifest_dir = os.path.join(charm_dir, 'files/manifests')
-    if not os.path.exists(rendered_manifest_dir):
-        os.makedirs(rendered_manifest_dir)
 
     api_opts = FlagManager('kube-apiserver')
     controller_opts = FlagManager('kube-controller-manager')
     scheduler_opts = FlagManager('kube-scheduler')
 
+    layer_options = layer.options('tls-client')
+    certificates_directory = layer_options.get('certificates-directory')
+    ca_certificate = os.path.join(certificates_directory, 'ca.crt')
+    server_certificate = os.path.join(certificates_directory, 'server.crt')
+    server_key = os.path.join(certificates_directory, 'server.key')
+
     # Handle static options for now
-    # TODO: Read these when appropriate off relationship data
     api_opts.add('--min-request-timeout', '300')
     api_opts.add('--v', '4')
+    api_opts.add('--client-ca-file', ca_certificate)
+    api_opts.add('--tls-cert-file', server_certificate)
+    api_opts.add('--tls-private-key-file', server_key)
 
     scheduler_opts.add('--v', '2')
 
     # Default to 3 minute resync. TODO: Make this configureable?
     controller_opts.add('--min-resync-period', '3m')
     controller_opts.add('--v', '2')
+    controller_opts.add('--root-ca-file', ca_certificate)
 
     context.update({'kube_apiserver_flags': api_opts.to_s(),
                     'kube_scheduler_flags': scheduler_opts.to_s(),
@@ -406,15 +453,6 @@ def setup_tokens(token, username, user):
         token = ''.join(random.SystemRandom().choice(alpha) for _ in range(32))
     with open(known_tokens, 'w') as stream:
         stream.write('{0},{1},{2}'.format(token, username, user))
-
-
-def start_service(service_name):
-    '''Start the systemd service by name return True if the command was
-    successful.'''
-    start = 'systemctl start {0}'.format(service_name)
-    print(start)
-    return_code = call(split(start))
-    return return_code == 0
 
 
 def render_service(service_name, context):

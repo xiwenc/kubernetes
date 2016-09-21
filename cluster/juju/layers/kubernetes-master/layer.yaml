@@ -1,8 +1,11 @@
 repo: https://github.com/kubernetes/kubernetes.git
 includes:
   - 'layer:basic'
+  - 'layer:tls-client'
   - 'interface:etcd'
   - 'interface:http'
   - 'interface:sdn-plugin'
-  - 'interface:kube-api'
   - 'interface:kube-dns'
+options:
+  tls-client:
+    certificates-directory: '/srv/kubernetes'
