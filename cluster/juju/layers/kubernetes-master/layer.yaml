@@ -5,7 +5,6 @@ includes:
   - 'interface:etcd'
   - 'interface:http'
   - 'interface:sdn-plugin'
-  - 'interface:kube-api'
   - 'interface:kube-dns'
 options:
   tls-client:

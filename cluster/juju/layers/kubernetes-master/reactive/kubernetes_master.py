@@ -159,13 +159,11 @@ def send_cluster_dns_detail(cluster_dns, sdn_plugin):
     cluster_dns.set_dns_info(53, hookenv.config('dns_domain'), sdn_ip)
 
 
-# TODO: This needs a much better relationship name...
 @when('kube-api-endpoint.available')
 def push_service_data(kube_api):
     ''' Send configuration to the load balancer, and close access to the
     public interface '''
-    hookenv.close_port(8080)
-    kube_api.configure(port=8080)
+    kube_api.configure(port=6443)
 
 
 @when('certificates.available', 'sdn-plugin.available')
@@ -388,9 +386,6 @@ def render_files():
                     'private_address': hookenv.unit_get('private-address')})
 
     charm_dir = hookenv.charm_dir()
-    rendered_manifest_dir = os.path.join(charm_dir, 'files/manifests')
-    if not os.path.exists(rendered_manifest_dir):
-        os.makedirs(rendered_manifest_dir)
 
     api_opts = FlagManager('kube-apiserver')
     controller_opts = FlagManager('kube-controller-manager')
