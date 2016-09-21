@@ -1,8 +1,11 @@
 includes:
   - 'layer:basic'
   - 'layer:docker'
+  - 'layer:tls-client'
   - 'interface:http'
   - 'interface:sdn-plugin'
   - 'interface:kube-dns'
 repo: https://github.com/kubernetes/kubernetes
-
+options:
+  tls-client:
+    certificates-directory: '/srv/kubernetes'

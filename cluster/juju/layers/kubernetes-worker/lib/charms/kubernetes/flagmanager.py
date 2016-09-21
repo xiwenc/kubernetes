@@ -1,9 +1,9 @@
 from charmhelpers.core import unitdata
 
 
-class ServerOpts:
+class FlagManager:
     '''
-    ServerOptsManager - A Python class for managing the flags to pass to an
+    FlagManager - A Python class for managing the flags to pass to an
     application without remembering what's been set previously.
 
     This is a blind class assuming the operator knows what they are doing.
@@ -14,7 +14,7 @@ class ServerOpts:
     THe underlying data-provider is backed by a SQLITE database on each unit,
     tracking the dictionary, provided from the 'charmhelpers' python package.
     Summary:
-    opts = ServerOpts()
+    opts = FlagManager('docker')
     opts.add('bip', '192.168.22.2')
     opts.to_s()
     '''
@@ -44,6 +44,8 @@ class ServerOpts:
         '''
         if strict:
             self.data['{}-strict'.format(key)] = value
+            self.__save()
+            return
 
         if value:
             values = [x.strip() for x in value.split(',')]
@@ -75,6 +77,23 @@ class ServerOpts:
         self.data[key].remove(value)
         self.__save()
 
+    def destroy(self, key, strict=False):
+        '''
+        Destructively remove all values and key from the FlagManager
+        Assuming the data is currently {'foo': ['bar', 'baz']}
+        d.wipe('foo')
+        >{}
+        :params key:
+        :params strict:
+        '''
+        try:
+            if strict:
+                self.data.pop('{}-strict'.format(key))
+            else:
+                self.data.pop('key')
+        except KeyError:
+            pass
+
     def to_s(self):
         '''
         Render the flags to a single string, prepared for the Docker
@@ -84,15 +103,16 @@ class ServerOpts:
         '''
         flags = []
         for key in self.data:
-            if self.data[key] == None:
+            if self.data[key] is None:
                 # handle flagonly
-                flags.append("--{}".format(key))
+                flags.append("{}".format(key))
             elif '-strict' in key:
-                # handle strict values
-                proper_key = key.rstrip('-strict')
-                flags.append("--{}={}".format(proper_key, self.data[key]))
+                # handle strict values, and do it in 2 steps.
+                # If we rstrip -strict it strips a tailing s
+                proper_key = key.rstrip('strict').rstrip('-')
+                flags.append("{}={}".format(proper_key, self.data[key]))
             else:
                 # handle multiopt and typical flags
                 for item in self.data[key]:
-                    flags.append("--{}={}".format(key, item))
+                    flags.append("{}={}".format(key, item))
         return ' '.join(flags)

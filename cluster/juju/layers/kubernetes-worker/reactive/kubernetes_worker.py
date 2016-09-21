@@ -1,3 +1,4 @@
+from charms import layer
 from charms.reactive import hook
 from charms.reactive import remove_state
 from charms.reactive import set_state
@@ -7,7 +8,7 @@ from charms.docker import DockerOpts
 from charmhelpers.core import hookenv
 from charmhelpers.core import host
 from charmhelpers.fetch import apt_install
-from charms.serveropts import ServerOpts
+from charms.kubernetes.flagmanager import FlagManager
 from charms.templating.jinja2 import render
 
 import os
@@ -115,32 +116,39 @@ def render_dns_scripts(kube_api, kube_dns):
     # Fetch the data on the wire
     dns = kube_dns.details()
     # Initialize a ServerOpts flag manager
-    opts = ServerOpts('kubelet')
+    opts = FlagManager('kubelet')
     # Append our flags + data to the options manager
     opts.add('cluster-dns', '{0}:{1}'.format(dns['sdn-ip'], dns['port']))
     opts.add('cluster-domain', dns['domain'])
     render_init_scripts(kube_api)
 
 
-@when('kube-api-endpoint.available', 'kubernetes.worker.bins.installed')
-def render_init_scripts(kube_api_endpoint):
+@when('kube-api-endpoint.available', 'kubernetes.worker.bins.installed',
+      'certificates.available')
+def render_init_scripts(kube_api_endpoint, tls):
     ''' We have related to either an api server or a load balancer connected
     to the apiserver. Render the config files and prepare for launch '''
     context = {}
     context.update(hookenv.config())
+
+    # Read from the layer options for tls-client certificate directory
+    certdir = layer.options('tls-client').get('certificates-directory')
+    context['ssl_path'] = certdir
+
     hosts = []
     for serv in kube_api_endpoint.services():
         for unit in serv['hosts']:
-            hosts.append('http://{}:{}'.format(unit['hostname'], unit['port']))
-            print(hosts)
+            hosts.append('https://{}:{}'.format(unit['hostname'],
+                                                unit['port']))
+            hookenv.log(hosts)
     unit_name = os.getenv('JUJU_UNIT_NAME').replace('/', '-')
     context.update({'kube_api_endpoint': ','.join(hosts),
                     'JUJU_UNIT_NAME': unit_name})
 
     # Iterate through the aggregated opts and append them
-    kubelet_opts = ServerOpts('kubelet')
+    kubelet_opts = FlagManager('kubelet')
     context['kubelet_opts'] = kubelet_opts.to_s()
-    kube_proxy_opts = ServerOpts('kube-proxy')
+    kube_proxy_opts = FlagManager('kube-proxy')
     context['kube_proxy_opts'] = kube_proxy_opts.to_s()
 
     os.makedirs('/var/lib/kubelet', exist_ok=True)
