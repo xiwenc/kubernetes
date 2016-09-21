@@ -110,8 +110,8 @@ def container_sdn_setup(sdn):
 
 
 @when('kubernetes.worker.bins.installed', 'kube-api-endpoint.available',
-      'kube-dns.available')
-def render_dns_scripts(kube_api, kube_dns):
+      'kube-dns.available', 'certificates.available')
+def render_dns_scripts(kube_api, kube_dns, tls):
     ''' Re-render init config with DNS data '''
     # Fetch the data on the wire
     dns = kube_dns.details()
@@ -120,7 +120,7 @@ def render_dns_scripts(kube_api, kube_dns):
     # Append our flags + data to the options manager
     opts.add('cluster-dns', '{0}:{1}'.format(dns['sdn-ip'], dns['port']))
     opts.add('cluster-domain', dns['domain'])
-    render_init_scripts(kube_api)
+    render_init_scripts(kube_api, tls)
 
 
 @when('kube-api-endpoint.available', 'kubernetes.worker.bins.installed',
@@ -149,12 +149,19 @@ def render_init_scripts(kube_api_endpoint, tls):
     kubelet_opts = FlagManager('kubelet')
     context['kubelet_opts'] = kubelet_opts.to_s()
     kube_proxy_opts = FlagManager('kube-proxy')
+    kube_proxy_opts.add('--kubeconfig', '/etc/kubernetes/kube-proxy.config')
     context['kube_proxy_opts'] = kube_proxy_opts.to_s()
 
     os.makedirs('/var/lib/kubelet', exist_ok=True)
-    render('kubelet-kubeconfig', '/etc/kubernetes/kubelet.config', context)
+    # Set the user when rendering config
+    context['user'] = 'kubelet'
+    render('kubeconfig', '/etc/kubernetes/kubelet.config', context)
+    # set the user when rendering config
+    context['user'] = 'kube-proxy'
+    render('kubeconfig', '/etc/kubernetes/kube-proxy.config', context)
     render('kube-default', '/etc/default/kube-default', context)
     render('kubelet.defaults', '/etc/default/kubelet', context)
+    render('kube-proxy.defaults', '/etc/default/kube-proxy', context)
     render('kube-proxy.service', '/lib/systemd/system/kube-proxy.service',
            context)
     render('kubelet.service', '/lib/systemd/system/kubelet.service', context)
