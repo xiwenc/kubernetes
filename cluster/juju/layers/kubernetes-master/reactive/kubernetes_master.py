@@ -239,6 +239,21 @@ def launch_kubernetes_dashboard():
 @when_not('kube-dns.available')
 def start_kube_dns(sdn_plugin):
     ''' State guard to starting DNS '''
+
+    # Interrogate the cluster to find out if we have at least one worker
+    # that is capable of running the workload.
+
+    cmd = ['kubectl', 'get', 'nodes']
+    try:
+        out = check_output(cmd)
+        if 'NAME' not in out:
+            hookenv.log('Unable to determine node count, waiting '
+                        'until nodes are ready')
+            return
+    except CalledProcessError:
+        hookenv.log('kube-apiserver not ready, not requesting dns deployment')
+        return
+
     context = prepare_sdn_context(sdn_plugin)
     context['arch'] = arch()
     render('kubedns-rc.yaml', '/etc/kubernetes/addons/kubedns-rc.yaml',
@@ -384,8 +399,6 @@ def render_files():
                     'master_address': hookenv.unit_get('private-address'),
                     'public_address': hookenv.unit_get('public-address'),
                     'private_address': hookenv.unit_get('private-address')})
-
-    charm_dir = hookenv.charm_dir()
 
     api_opts = FlagManager('kube-apiserver')
     controller_opts = FlagManager('kube-controller-manager')
