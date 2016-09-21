@@ -1,3 +1,7 @@
 includes:
   - layer:nginx
+  - layer:tls-client
 repo: https://github.com/juju-solutions/kubernetes-load-balancer
+options:
+  tls-client:
+    certificates-directory: '/srv/kubernetes'
