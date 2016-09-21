@@ -215,19 +215,26 @@ def gather_sdn_data(sdn_plugin):
     set_state('kube-sdn.configured')
 
 
-@when('kube_master_components.installed')
+@when('config.changed.dashboard', 'kubernetes.dashboard.available')
+def reset_states():
+    remove_state('kubernetes.dashboard.available')
+    launch_kubernetes_dashboard()
+
+
+@when('kube-dns.available')
 @when_not('kubernetes.dashboard.available')
 def launch_kubernetes_dashboard():
     ''' Launch the Kubernetes dashboard. If not enabled, attempt deletion '''
+    manifest = '/etc/kubernetes/addons/dashboard.yaml'
     if hookenv.config('dashboard'):
-        # TODO - make this self contained
-        dashboard_manifest = 'https://rawgit.com/kubernetes/dashboard/master/src/deploy/kubernetes-dashboard.yaml'  # noqa
-        cmd = ['kubectl', 'create', '-f', dashboard_manifest]
+        context = {}
+        context['arch'] = arch()
+        render('kubernetes-dashboard.yaml', manifest, context)
+        cmd = ['kubectl', 'create', '-f', manifest]
         call(cmd)
         set_state('kubernetes.dashboard.available')
     else:
-        cmd = ['kubectl', 'delete', 'kubernetes-dashboard',
-               '--namespace=kube-system']
+        cmd = ['kubectl', 'delete', '-f', manifest]
         try:
             call(cmd)
         except CalledProcessError:
@@ -246,7 +253,7 @@ def start_kube_dns(sdn_plugin):
     cmd = ['kubectl', 'get', 'nodes']
     try:
         out = check_output(cmd)
-        if 'NAME' not in out:
+        if b'NAME' not in out:
             hookenv.log('Unable to determine node count, waiting '
                         'until nodes are ready')
             return
