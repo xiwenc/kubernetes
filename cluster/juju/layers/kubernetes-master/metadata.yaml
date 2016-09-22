@@ -1,5 +1,5 @@
 name: kubernetes-master
-summary: A charm that provides a Kubernetes master node, that can be scaled for high availability.
+summary: The Kubernetes control plane.
 maintainers:
     - Matthew Bruzek <matthew.bruzek@canonical.com>
     - Charles Butler <charles.butler@canonical.com>

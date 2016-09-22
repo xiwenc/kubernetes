@@ -1,3 +1,6 @@
+import os
+import subprocess
+
 from charms import layer
 from charms.reactive import hook
 from charms.reactive import remove_state
@@ -10,9 +13,6 @@ from charmhelpers.core import host
 from charmhelpers.fetch import apt_install
 from charms.kubernetes.flagmanager import FlagManager
 from charms.templating.jinja2 import render
-
-import os
-import subprocess
 
 
 def _reconfigure_docker_for_sdn():
@@ -131,9 +131,11 @@ def render_init_scripts(kube_api_endpoint, tls):
     context = {}
     context.update(hookenv.config())
 
-    # Read from the layer options for tls-client certificate directory
-    certdir = layer.options('tls-client').get('certificates-directory')
-    context['ssl_path'] = certdir
+    # Get the tls paths from the layer data.
+    layer_options = layer.options('tls-client')
+    context['ca_cert_path'] = layer_options.get('ca_certificate_path')
+    context['client_cert_path'] = layer_options.get('client_certificate_path')
+    context['client_key_path'] = layer_options.get('client_key_path')
 
     hosts = []
     for serv in kube_api_endpoint.services():
