@@ -371,7 +371,7 @@ def build_kubeconfig(server):
            '/usr/local/bin/kubectl', destination_directory]
     check_call(cmd)
     # Make the config file readable by the ubuntu user for juju scp
-    cmd = ['chown', 'ubuntu:ubuntu', 'config']
+    cmd = ['chown', 'ubuntu:ubuntu', kubeconfig_path]
     check_call(cmd)
 
 
