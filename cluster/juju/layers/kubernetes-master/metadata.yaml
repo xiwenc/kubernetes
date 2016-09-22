@@ -27,6 +27,8 @@ provides:
 requires:
   etcd:
     interface: etcd
+  loadbalancer:
+    interface: public-address
 resources:
   kubernetes:
     type: file

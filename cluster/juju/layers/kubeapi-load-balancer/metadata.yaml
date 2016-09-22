@@ -12,3 +12,6 @@ series:
 requires:
   apiserver:
     interface: http
+provides:
+  loadbalancer:
+      interface: public-address
