@@ -367,10 +367,11 @@ def build_kubeconfig(server):
     # Create the kubeconfig on this system so users can access the cluster.
     create_kubeconfig(kubeconfig_path, server, ca, key, cert)
     # Copy the kubectl binary to the destination directory.
-    cmd = ['install', '-v', '/usr/local/bin/kubectl', destination_directory]
+    cmd = ['install', '-v', '-o', 'ubuntu', '-g', 'ubuntu',
+           '/usr/local/bin/kubectl', destination_directory]
     check_call(cmd)
     # Make the config file readable by the ubuntu user for juju scp
-    cmd = ['chown', 'ubuntu', 'config']
+    cmd = ['chown', 'ubuntu:ubuntu', 'config']
     check_call(cmd)
 
 
