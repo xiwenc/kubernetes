@@ -291,7 +291,7 @@ def loadbalancer_kubeconfig(loadbalancer, ca, client):
 @when_not('loadbalancer.available')
 def create_self_config(ca, client):
     '''Create a kubernetes configuration for the master unit.'''
-    server = 'https://{0}:{1}'.format(hookenv.unit_get('public_address'), 6443)
+    server = 'https://{0}:{1}'.format(hookenv.unit_get('public-address'), 6443)
     build_kubeconfig(server)
 
 
@@ -368,6 +368,9 @@ def build_kubeconfig(server):
     create_kubeconfig(kubeconfig_path, server, ca, key, cert)
     # Copy the kubectl binary to the destination directory.
     cmd = ['install', '-v', '/usr/local/bin/kubectl', destination_directory]
+    check_call(cmd)
+    # Make the config file readable by the ubuntu user for juju scp
+    cmd = ['chown', 'ubuntu', 'config']
     check_call(cmd)
 
 
