@@ -41,11 +41,14 @@ def install_load_balancer(apiserver, tls):
     cert_exists = server_cert_path and os.path.isfile(server_cert_path)
     server_key_path = layer_options.get('server_key_path')
     key_exists = server_key_path and os.path.isfile(server_key_path)
-
+    # Do both the the key and certificate exist?
     if cert_exists and key_exists:
+        # At this point the cert and key exist, and they are owned by root.
         chown = ['chown', 'www-data:www-data', server_cert_path]
+        # Change the owner to www-data so the nginx process can read the cert.
         subprocess.call(chown)
         chown = ['chown', 'www-data:www-data', server_key_path]
+        # Change the owner to www-data so the nginx process can read the key.
         subprocess.call(chown)
 
         hookenv.open_port(hookenv.config('port'))
