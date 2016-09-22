@@ -274,7 +274,7 @@ def start_kube_dns(sdn_plugin):
     set_state('kube-dns.available')
 
 
-@when('loadbalancer.availiable', 'certificates.ca.available',
+@when('loadbalancer.available', 'certificates.ca.available',
       'certificates.client.cert.available')
 def loadbalancer_kubeconfig(loadbalancer, ca, client):
     # Get the potential list of loadbalancers from the relation object.
@@ -288,7 +288,7 @@ def loadbalancer_kubeconfig(loadbalancer, ca, client):
 
 
 @when('certificates.ca.available', 'certificates.client.cert.available')
-@when_not('loadbalancer.availiable')
+@when_not('loadbalancer.available')
 def create_self_config(ca, client):
     '''Create a kubernetes configuration for the master unit.'''
     server = 'https://{0}:{1}'.format(hookenv.unit_get('public_address'), 6443)
