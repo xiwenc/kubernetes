@@ -16,6 +16,7 @@ from charms.reactive import remove_state
 from charms.reactive import set_state
 from charms.reactive import when
 from charms.reactive import when_not
+from charms.reactive.helpers import data_changed
 from charms.kubernetes.flagmanager import FlagManager
 
 from charmhelpers.core import hookenv
@@ -273,6 +274,27 @@ def start_kube_dns(sdn_plugin):
     set_state('kube-dns.available')
 
 
+@when('loadbalancer.availiable', 'certificates.ca.available',
+      'certificates.client.cert.available')
+def loadbalancer_kubeconfig(loadbalancer, ca, client):
+    # Get the potential list of loadbalancers from the relation object.
+    hosts = loadbalancer.get_addresses_ports()
+    # Get the public address of loadbalancers so users can access the cluster.
+    address = hosts[0].get('public-address')
+    # Get the port of the loadbalancer so users can access the cluster.
+    port = hosts[0].get('port')
+    server = 'https://{0}:{1}'.format(address, port)
+    build_kubeconfig(server)
+
+
+@when('certificates.ca.available', 'certificates.client.cert.available')
+@when_not('loadbalancer.availiable')
+def create_self_config(ca, client):
+    '''Create a kubernetes configuration for the master unit.'''
+    server = 'https://{0}:{1}'.format(hookenv.unit_get('public_address'), 6443)
+    build_kubeconfig(server)
+
+
 def launch_dns():
     '''Create the "kube-system" namespace, the kubedns resource controller, and
     the kubedns service. '''
@@ -322,6 +344,53 @@ def arch():
         hookenv.status_set('blocked', message)
         raise Exception(message)
     return architecture
+
+
+def build_kubeconfig(server):
+    '''Gather the relevant data for Kubernetes configuration objects and create
+    a config object with that information.'''
+    # Cache the last server string to know if we need to regenerate the config.
+    if not data_changed('kubeconfig.server', server):
+        return
+    # The final destination of the kubeconfig and kubectl.
+    destination_directory = '/home/ubuntu'
+    # Create an absolute path for the kubeconfig file.
+    kubeconfig_path = os.path.join(destination_directory, 'config')
+    # Get the layer options to know where the certificates directory is.
+    layer_options = layer.options('tls-client')
+    # Get the certificate directory location.
+    certificates_directory = layer_options.get('certificates-directory')
+    # Create absolute paths to the CA, client certificate and key.
+    ca = os.path.join(certificates_directory, 'ca.crt')
+    key = os.path.join(certificates_directory, 'client.key')
+    cert = os.path.join(certificates_directory, 'client.crt')
+    # Create the kubeconfig on this system so users can access the cluster.
+    create_kubeconfig(kubeconfig_path, server, ca, key, cert)
+    # Copy the kubectl binary to the destination directory.
+    cmd = ['install', '-v', '/usr/local/bin/kubectl', destination_directory]
+    check_call(cmd)
+
+
+def create_kubeconfig(kubeconfig, server, ca, key, certificate, user='ubuntu',
+                      context='juju-context', cluster='juju-cluster'):
+    '''Create a configuration for Kubernetes based on path using the supplied
+    arguments for values of the Kubernetes server, CA, key, certificate, user
+    context and cluster.'''
+    # Create the config file with the address of the master server.
+    cmd = 'kubectl config --kubeconfig={0} set-cluster {1} ' \
+          '--server={2} --certificate-authority={3} --embed-certs=true'
+    check_call(split(cmd.format(kubeconfig, cluster, server, ca)))
+    # Create the credentials using the client flags.
+    cmd = 'kubectl config --kubeconfig={0} set-credentials {1} ' \
+          '--client-key={2} --client-certificate={3} --embed-certs=true'
+    check_call(split(cmd.format(kubeconfig, user, key, certificate)))
+    # Create a default context with the cluster.
+    cmd = 'kubectl config --kubeconfig={0} set-context {1} ' \
+          '--cluster={2} --user={3}'
+    check_call(split(cmd.format(kubeconfig, context, cluster, user)))
+    # Make the config use this new context.
+    cmd = 'kubectl config --kubeconfig={0} use-context {1}'
+    check_call(split(cmd.format(kubeconfig, context)))
 
 
 def get_dns_ip(cidr):
@@ -452,6 +521,18 @@ def render_files():
         pass
 
 
+def render_service(service_name, context):
+    '''Render the systemd service by name.'''
+    unit_directory = '/lib/systemd/system'
+    source = '{0}.service'.format(service_name)
+    target = os.path.join(unit_directory, '{0}.service'.format(service_name))
+    render(source, target, context)
+    conf_directory = '/etc/default'
+    source = '{0}.defaults'.format(service_name)
+    target = os.path.join(conf_directory, service_name)
+    render(source, target, context)
+
+
 def setup_basic_auth(username='admin', password='admin', user='admin'):
     '''Create the htacces file and the tokens.'''
     srv_kubernetes = '/srv/kubernetes'
@@ -473,15 +554,3 @@ def setup_tokens(token, username, user):
         token = ''.join(random.SystemRandom().choice(alpha) for _ in range(32))
     with open(known_tokens, 'w') as stream:
         stream.write('{0},{1},{2}'.format(token, username, user))
-
-
-def render_service(service_name, context):
-    '''Render the systemd service by name.'''
-    unit_directory = '/lib/systemd/system'
-    source = '{0}.service'.format(service_name)
-    target = os.path.join(unit_directory, '{0}.service'.format(service_name))
-    render(source, target, context)
-    conf_directory = '/etc/default'
-    source = '{0}.defaults'.format(service_name)
-    target = os.path.join(conf_directory, service_name)
-    render(source, target, context)

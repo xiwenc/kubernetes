@@ -34,8 +34,7 @@ def request_server_certificates(tls):
       'certificates.server.cert.available')
 def install_load_balancer(apiserver, tls):
     ''' Create the default vhost template for load balancing '''
-    hookenv.open_port(443)
-
+    hookenv.open_port(hookenv.config('port'))
     services = apiserver.services()
 
     layer_options = layer.options('tls-client')
@@ -43,7 +42,6 @@ def install_load_balancer(apiserver, tls):
     server_certificate = os.path.join(certificates_directory,
                                       'server.crt')
     server_key = os.path.join(certificates_directory, 'server.key')
-
     nginx.configure_site(
             'apilb',
             'apilb.conf',
@@ -77,4 +75,12 @@ def provide_application_details(website):
     ''' re-use the nginx layer website relation to relay the hostname/port
     to any consuming kubernetes-workers, or other units that require the
     kubernetes API '''
-    website.configure(port=443)
+    website.configure(port=hookenv.config('port'))
+
+
+@when('loadbalancer.available')
+def provide_loadbalancing(loadbalancer):
+    '''Send the public address and port to the public-address interface, so
+    the subordinates can get the public address of this loadbalancer.'''
+    loadbalancer.set_address_port(hookenv.unit_get('public-address'),
+                                  hookenv.config('port'))

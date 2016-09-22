@@ -6,6 +6,7 @@ includes:
   - 'interface:http'
   - 'interface:sdn-plugin'
   - 'interface:kube-dns'
+  - 'interface:public-address'
 options:
   tls-client:
     certificates-directory: '/srv/kubernetes'
