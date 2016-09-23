@@ -10,8 +10,5 @@ KUBELET_PORT="--port=10250"
 # reachability problems become your own issue.
 # KUBELET_HOSTNAME="--hostname-override={{ JUJU_UNIT_NAME }}"
 
-# location of the api-server
-KUBELET_API_SERVER="--api-servers={{ kube_api_endpoint }}"
-
 # Add your own!
 KUBELET_ARGS="{{ kubelet_opts }}"
