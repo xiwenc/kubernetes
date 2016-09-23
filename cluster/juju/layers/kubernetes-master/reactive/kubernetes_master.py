@@ -521,11 +521,10 @@ def render_files():
     render('kube-defaults.defaults', '/etc/default/kube-defaults', context)
 
     # when files change on disk, we need to inform systemd of the changes
-    try:
-        check_call(['systemctl', 'daemon-reload'])
-    except CalledProcessError:
-        # we failed, chances are no changes were made. so assume this is fine
-        pass
+    call(['systemctl', 'daemon-reload'])
+    call(['systemctl', 'enable', 'kube-apiserver'])
+    call(['systemctl', 'enable', 'kube-controller-manager'])
+    call(['systemctl', 'enable', 'kube-scheduler'])
 
 
 def render_service(service_name, context):
