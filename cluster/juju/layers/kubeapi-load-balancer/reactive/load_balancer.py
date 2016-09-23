@@ -1,3 +1,7 @@
+import os
+import socket
+import subprocess
+
 from charms import layer
 from charms.reactive import when
 from charmhelpers.core import hookenv
@@ -7,9 +11,6 @@ from charms.layer import nginx
 from subprocess import Popen
 from subprocess import PIPE
 from subprocess import STDOUT
-
-import os
-import socket
 
 
 @when('certificates.available')
@@ -34,24 +35,34 @@ def request_server_certificates(tls):
       'certificates.server.cert.available')
 def install_load_balancer(apiserver, tls):
     ''' Create the default vhost template for load balancing '''
-    hookenv.open_port(hookenv.config('port'))
-    services = apiserver.services()
-
+    # Get the tls paths from the layer data.
     layer_options = layer.options('tls-client')
-    certificates_directory = layer_options.get('certificates-directory')
-    server_certificate = os.path.join(certificates_directory,
-                                      'server.crt')
-    server_key = os.path.join(certificates_directory, 'server.key')
-    nginx.configure_site(
-            'apilb',
-            'apilb.conf',
-            server_name='_',
-            services=services,
-            port=hookenv.config('port'),
-            server_certificate=server_certificate,
-            server_key=server_key,
-    )
-    hookenv.status_set('active', 'Loadbalancer ready.')
+    server_cert_path = layer_options.get('server_certificate_path')
+    cert_exists = server_cert_path and os.path.isfile(server_cert_path)
+    server_key_path = layer_options.get('server_key_path')
+    key_exists = server_key_path and os.path.isfile(server_key_path)
+    # Do both the the key and certificate exist?
+    if cert_exists and key_exists:
+        # At this point the cert and key exist, and they are owned by root.
+        chown = ['chown', 'www-data:www-data', server_cert_path]
+        # Change the owner to www-data so the nginx process can read the cert.
+        subprocess.call(chown)
+        chown = ['chown', 'www-data:www-data', server_key_path]
+        # Change the owner to www-data so the nginx process can read the key.
+        subprocess.call(chown)
+
+        hookenv.open_port(hookenv.config('port'))
+        services = apiserver.services()
+        nginx.configure_site(
+                'apilb',
+                'apilb.conf',
+                server_name='_',
+                services=services,
+                port=hookenv.config('port'),
+                server_certificate=server_cert_path,
+                server_key=server_key_path,
+        )
+        hookenv.status_set('active', 'Loadbalancer ready.')
 
 
 @when('nginx.available')

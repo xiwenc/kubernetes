@@ -10,7 +10,6 @@ from subprocess import check_output
 from subprocess import CalledProcessError
 
 from charms import layer
-
 from charms.reactive import hook
 from charms.reactive import remove_state
 from charms.reactive import set_state
@@ -349,30 +348,33 @@ def arch():
 def build_kubeconfig(server):
     '''Gather the relevant data for Kubernetes configuration objects and create
     a config object with that information.'''
-    # Cache the last server string to know if we need to regenerate the config.
-    if not data_changed('kubeconfig.server', server):
-        return
-    # The final destination of the kubeconfig and kubectl.
-    destination_directory = '/home/ubuntu'
-    # Create an absolute path for the kubeconfig file.
-    kubeconfig_path = os.path.join(destination_directory, 'config')
-    # Get the layer options to know where the certificates directory is.
+    # Get the options from the tls-client layer.
     layer_options = layer.options('tls-client')
-    # Get the certificate directory location.
-    certificates_directory = layer_options.get('certificates-directory')
-    # Create absolute paths to the CA, client certificate and key.
-    ca = os.path.join(certificates_directory, 'ca.crt')
-    key = os.path.join(certificates_directory, 'client.key')
-    cert = os.path.join(certificates_directory, 'client.crt')
-    # Create the kubeconfig on this system so users can access the cluster.
-    create_kubeconfig(kubeconfig_path, server, ca, key, cert)
-    # Copy the kubectl binary to the destination directory.
-    cmd = ['install', '-v', '-o', 'ubuntu', '-g', 'ubuntu',
-           '/usr/local/bin/kubectl', destination_directory]
-    check_call(cmd)
-    # Make the config file readable by the ubuntu user for juju scp
-    cmd = ['chown', 'ubuntu:ubuntu', kubeconfig_path]
-    check_call(cmd)
+    # Get all the paths to the tls information required for kubeconfig.
+    ca = layer_options.get('ca_certificate_path')
+    ca_exists = ca and os.path.isfile(ca)
+    key = layer_options.get('client_key_path')
+    key_exists = key and os.path.isfile(key)
+    cert = layer_options.get('client_certificate_path')
+    cert_exists = cert and os.path.isfile(cert)
+    # Do we have everything we need?
+    if ca_exists and key_exists and cert_exists:
+        # Cache last server string to know if we need to regenerate the config.
+        if not data_changed('kubeconfig.server', server):
+            return
+        # The final destination of the kubeconfig and kubectl.
+        destination_directory = '/home/ubuntu'
+        # Create an absolute path for the kubeconfig file.
+        kubeconfig_path = os.path.join(destination_directory, 'config')
+        # Create the kubeconfig on this system so users can access the cluster.
+        create_kubeconfig(kubeconfig_path, server, ca, key, cert)
+        # Copy the kubectl binary to the destination directory.
+        cmd = ['install', '-v', '-o', 'ubuntu', '-g', 'ubuntu',
+               '/usr/local/bin/kubectl', destination_directory]
+        check_call(cmd)
+        # Make the config file readable by the ubuntu users so juju scp works.
+        cmd = ['chown', 'ubuntu:ubuntu', kubeconfig_path]
+        check_call(cmd)
 
 
 def create_kubeconfig(kubeconfig, server, ca, key, certificate, user='ubuntu',
@@ -471,8 +473,9 @@ def render_files():
     '''Use jinja templating to render the docker-compose.yml and master.json
     file to contain the dynamic data for the configuration files.'''
     context = {}
+    config = hookenv.config()
     # Add the charm configuration data to the context.
-    context.update(hookenv.config())
+    context.update(config)
 
     # Update the context with extra values: arch, and networking information
     context.update({'arch': arch(),
@@ -484,25 +487,25 @@ def render_files():
     controller_opts = FlagManager('kube-controller-manager')
     scheduler_opts = FlagManager('kube-scheduler')
 
+    # Get the tls paths from the layer data.
     layer_options = layer.options('tls-client')
-    certificates_directory = layer_options.get('certificates-directory')
-    ca_certificate = os.path.join(certificates_directory, 'ca.crt')
-    server_certificate = os.path.join(certificates_directory, 'server.crt')
-    server_key = os.path.join(certificates_directory, 'server.key')
+    ca_cert_path = layer_options.get('ca_certificate_path')
+    server_cert_path = layer_options.get('server_certificate_path')
+    server_key_path = layer_options.get('server_key_path')
 
     # Handle static options for now
     api_opts.add('--min-request-timeout', '300')
     api_opts.add('--v', '4')
-    api_opts.add('--client-ca-file', ca_certificate)
-    api_opts.add('--tls-cert-file', server_certificate)
-    api_opts.add('--tls-private-key-file', server_key)
+    api_opts.add('--client-ca-file', ca_cert_path)
+    api_opts.add('--tls-cert-file', server_cert_path)
+    api_opts.add('--tls-private-key-file', server_key_path)
 
     scheduler_opts.add('--v', '2')
 
     # Default to 3 minute resync. TODO: Make this configureable?
     controller_opts.add('--min-resync-period', '3m')
     controller_opts.add('--v', '2')
-    controller_opts.add('--root-ca-file', ca_certificate)
+    controller_opts.add('--root-ca-file', ca_cert_path)
 
     context.update({'kube_apiserver_flags': api_opts.to_s(),
                     'kube_scheduler_flags': scheduler_opts.to_s(),
