@@ -2,5 +2,5 @@
 
 set -ex
 
-kubectl uncordon $(unit-get private-address)
+kubectl --kubeconfig=/srv/kubernetes/config uncordon $(hostname)
 status-set 'active' 'Kubernetes unit resumed'
