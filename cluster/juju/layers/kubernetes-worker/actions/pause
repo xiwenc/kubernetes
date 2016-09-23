@@ -2,6 +2,6 @@
 
 set -ex
 
-kubectl cordon $(unit-get private-address)
-kubectl drain $(unit-get private-address) --force
+kubectl --kubeconfig=/srv/kubernetes/config cordon $(hostname)
+kubectl --kubeconfig=/srv/kubernetes/config drain $(hostname) --force
 status-set 'waiting' 'Kubernetes unit paused'

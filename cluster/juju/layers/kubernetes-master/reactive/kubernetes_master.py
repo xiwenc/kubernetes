@@ -64,24 +64,21 @@ def install():
     os.makedirs(files_dir, exist_ok=True)
 
     command = 'tar -xvzf {0} -C {1}'.format(archive, files_dir)
-    print(command)
-    return_code = call(split(command))
+    hookenv.log(command)
+    check_call(split(command))
     dest_dir = '/usr/local/bin/'
     # Create a list of components to install.
     services = ['kube-apiserver',
                 'kube-controller-manager',
-                'kube-scheduler']
+                'kube-scheduler',
+                'kubectl']
     for service in services:
         # Install each one of the service binaries in /usr/local/bin.
         install = 'install -v {0}/{1} {2}'.format(files_dir, service, dest_dir)
         return_code = call(split(install))
         if return_code != 0:
             raise Exception('Unable to install {0}'.format(service))
-    # Install the kubectl tool, which is not a run as a systemd service.
-    install = 'install -v {0}/{1} {2}'.format(files_dir, 'kubectl', dest_dir)
-    return_code = call(split(install))
-    if return_code != 0:
-        raise Exception('Unable to install kubectl')
+
     set_state('kube_master_components.installed')
 
 
