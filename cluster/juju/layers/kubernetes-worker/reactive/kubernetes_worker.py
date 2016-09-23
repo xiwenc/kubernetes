@@ -172,15 +172,9 @@ def render_init_scripts(kube_api_endpoint, tls):
     subprocess.check_call(cmd)
 
     # ensure we're available after reboots
-    _enable_services(['kubelet.service', 'kube-proxy.service'])
+    subprocess.call(['systemctl', 'enable', 'kubelet.service'])
+    subprocess.call(['systemctl', 'enable', 'kube-proxy.service'])
 
     host.service_restart('kubelet')
     host.service_restart('kube-proxy')
     hookenv.status_set('active', 'Worker ready')
-
-
-def _enable_services(services):
-    ''' Enable rendered systemd daemons '''
-    for service in services:
-        cmd = ['systemctl', 'enable', service]
-        subprocess.call(cmd)
