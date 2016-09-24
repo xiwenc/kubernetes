@@ -202,6 +202,8 @@ def render_init_scripts(kube_api):
 
     # Create a flag manager for kubelet to render kubelet_opts.
     kubelet_opts = FlagManager('kubelet')
+    # Declare to kubelet it needs to read from kubeconfig
+    kubelet_opts.add('--require-kubeconfig', None)
     kubelet_opts.add('--kubeconfig', '/srv/kubernetes/config')
     context['kubelet_opts'] = kubelet_opts.to_s()
     # Create a flag manager for kube-proxy to render kube_proxy_opts.
