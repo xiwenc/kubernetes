@@ -27,7 +27,8 @@ def _reconfigure_docker_for_sdn():
     This method removes the default docker bridge, and reconfigures the
     DOCKER_OPTS to use the flannel networking bridge '''
 
-    hookenv.status_set('maintenance', 'Reconfiguring docker network bridge')
+    hookenv.status_set('maintenance',
+                       'Reconfiguring container runtime network bridge.')
     host.service_stop('docker')
     apt_install(['bridge-utils'], fatal=True)
     # cmd = "ifconfig docker0 down"
@@ -56,23 +57,23 @@ def install_kubernetes_components():
     try:
         archive = hookenv.resource_get('kubernetes')
     except Exception:
-        message = 'Error fetching the kubernetes resource'
+        message = 'Error fetching the kubernetes resource.'
         hookenv.log(message)
         hookenv.status_set('blocked', message)
         return
 
     if not archive:
-        hookenv.log('Missing kubernetes resource')
-        hookenv.status_set('blocked', 'Missing kubernetes resource')
+        hookenv.log('Missing kubernetes resource.')
+        hookenv.status_set('blocked', 'Missing kubernetes resource.')
         return
 
     # Handle null resource publication, we check if filesize < 1mb
     filesize = os.stat(archive).st_size
     if filesize < 1000000:
-        hookenv.status_set('blocked', 'Incomplete kubernetes resource')
+        hookenv.status_set('blocked', 'Incomplete kubernetes resource.')
         return
 
-    hookenv.status_set('maintenance', 'Unpacking kubernetes')
+    hookenv.status_set('maintenance', 'Unpacking kubernetes resource.')
 
     unpack_path = '{}/files/kubernetes'.format(charm_dir)
     os.makedirs(unpack_path, exist_ok=True)
@@ -112,7 +113,7 @@ def notify_user_transient_status():
     # declared in the kube-system namespace
 
     hookenv.status_set('waiting',
-                       'Waiting for cluster-manager to initiate start')
+                       'Waiting for cluster-manager to initiate start.')
 
 
 @when('kubernetes.worker.bins.installed', 'kube-dns.available')
@@ -127,14 +128,13 @@ def notify_user_converging_status(kube_dns):
     # kubelet is running
     if (_systemctl_is_active('kubelet') and
        '--cluster-dns' not in kubelet_opts.data):
-        hookenv.status_set('waiting', 'Waiting on cluster dns')
+        hookenv.status_set('waiting', 'Waiting for cluster DNS.')
     elif(_systemctl_is_active('kubelet') and
          '--cluster-dns' in kubelet_opts.data):
-        hookenv.status_set('active',
-                           'Kubernetes worker running')
+        hookenv.status_set('active', 'Kubernetes worker running.')
     # if kubelet is not running, we're waiting on something else to converge
     elif(not _systemctl_is_active('kubelet')):
-        hookenv.status_set('waiting', 'waiting on kubelet')
+        hookenv.status_set('waiting', 'Waiting for kubelet to start.')
 
 
 @when('sdn-plugin.available', 'docker.available')
@@ -142,7 +142,8 @@ def notify_user_converging_status(kube_dns):
 def container_sdn_setup(sdn):
     ''' Receive the information from the SDN plugin, and render the docker
     engine options. '''
-    hookenv.status_set('maintenance', 'Configuring docker for sdn')
+    hookenv.status_set('maintenance',
+                       'Configuring container runtime with SDN.')
     sdn_config = sdn.get_sdn_config()
 
     opts = DockerOpts()
