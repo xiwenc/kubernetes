@@ -42,23 +42,23 @@ def install():
     try:
         archive = hookenv.resource_get('kubernetes')
     except Exception:
-        message = 'Error fetching the kubernetes resource'
+        message = 'Error fetching the kubernetes resource.'
         hookenv.log(message)
         hookenv.status_set('blocked', message)
         return
 
     if not archive:
-        hookenv.log('Missing kubernetes resource')
-        hookenv.status_set('blocked', 'Missing kubernetes resource')
+        hookenv.log('Missing kubernetes resource.')
+        hookenv.status_set('blocked', 'Missing kubernetes resource.')
         return
 
     # Handle null resource publication, we check if filesize < 1mb
     filesize = os.stat(archive).st_size
     if filesize < 1000000:
-        hookenv.status_set('blocked', 'Incomplete kubernetes resource')
+        hookenv.status_set('blocked', 'Incomplete kubernetes resource.')
         return
 
-    hookenv.status_set('maintenance', 'Unpacking Kubernetes.')
+    hookenv.status_set('maintenance', 'Unpacking kubernetes resource.')
     files_dir = os.path.join(hookenv.charm_dir(), 'files')
 
     os.makedirs(files_dir, exist_ok=True)
@@ -124,7 +124,7 @@ def set_app_version():
       'kube_master_components.installed')
 def ready_messaging():
     ''' Signal at the end of the run that we are running. '''
-    hookenv.status_set('active', "Kubernetes master running.")
+    hookenv.status_set('active', 'Kubernetes master running.')
 
 
 @when('etcd.available', 'kube_master_components.installed',
@@ -205,7 +205,7 @@ def push_api_data(kube_api):
 def gather_sdn_data(sdn_plugin):
     sdn_data = sdn_plugin.get_sdn_config()
     if not sdn_data['cidr'] or not sdn_data['subnet'] or not sdn_data['mtu']:
-        hookenv.status_set('waiting', 'Waiting on SDN configuration')
+        hookenv.status_set('waiting', 'Waiting on SDN configuration.')
         return
     api_opts = FlagManager('kube-apiserver')
     api_opts.add('--service-cluster-ip-range', sdn_data['cidr'])
@@ -335,11 +335,6 @@ def arch():
     architecture = check_output(['dpkg', '--print-architecture']).rstrip()
     # Convert the binary result into a string.
     architecture = architecture.decode('utf-8')
-    # Validate the architecture is supported by kubernetes.
-    if architecture not in ['amd64', 'arm', 'arm64', 'ppc64le']:
-        message = 'Unsupported machine architecture: {0}'.format(architecture)
-        hookenv.status_set('blocked', message)
-        raise Exception(message)
     return architecture
 
 
