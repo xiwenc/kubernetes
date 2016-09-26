@@ -1,0 +1,7 @@
+options:
+  ingress:
+    type: boolean
+    default: true
+    description: |
+      Deploy the default http backend and ingress controller to handle
+      ingress requests.
