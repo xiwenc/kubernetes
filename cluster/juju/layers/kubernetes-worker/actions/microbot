@@ -1,0 +1,54 @@
+#!/usr/bin/python3
+
+import sys
+
+from charmhelpers.core.hookenv import action_get
+from charmhelpers.core.hookenv import action_set
+from charmhelpers.core.hookenv import unit_public_ip
+from charms.templating.jinja2 import render
+from subprocess import call
+
+
+context = {}
+context['replicas'] = action_get('replicas')
+context['delete'] = action_get('delete')
+context['public_address'] = unit_public_ip()
+
+# Declare a kubectl template when invoking kubectl
+kubectl = ['kubectl', '--kubeconfig=/srv/kubernetes/config']
+
+# Remove deployment if requested
+if context['delete']:
+    service_del = kubectl + ['delete', 'svc', 'microbot']
+    service_response = call(service_del)
+    deploy_del = kubectl + ['delete', 'deployment', 'microbot']
+    deploy_response = call(deploy_del)
+    ingress_del = kubectl + ['delete', 'ing', 'microbot-ingress']
+    ingress_response = call(ingress_del)
+
+    if ingress_response != 0:
+        action_set({'microbot-ing':
+                   'Failed removal of microbot ingress resource.'})
+    if deploy_response != 0:
+        action_set({'microbot-deployment':
+                   'Failed removal of microbot deployment resource.'})
+    if service_response != 0:
+        action_set({'microbot-service':
+                   'Failed removal of microbot service resource.'})
+    sys.exit(0)
+
+# Creation request
+
+render('microbot-example.yaml', '/etc/kubernetes/addons/microbot.yaml',
+       context)
+
+create_command = kubectl + ['create', '-f',
+                            '/etc/kubernetes/addons/microbot.yaml']
+
+create_response = call(create_command)
+
+if create_response == 0:
+    action_set({'address':
+               'microbot.{}.xip.io'.format(context['public_address'])})
+else:
+    action_set({'microbot-create': 'Failed microbot creation.'})
