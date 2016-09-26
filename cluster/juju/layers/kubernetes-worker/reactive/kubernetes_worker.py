@@ -196,7 +196,7 @@ def toggle_ingress_state():
 
 @when('kubernetes.worker.bins.installed', 'kube-dns.available')
 @when_not('kubernetes-worker.ingress.available')
-def render_and_launch_ingress():
+def render_and_launch_ingress(kube_dns):
     ''' If configuration has ingress RC enabled, launch the ingress load
     balancer and default http backend. Otherwise attempt deletion. '''
     config = hookenv.config()
