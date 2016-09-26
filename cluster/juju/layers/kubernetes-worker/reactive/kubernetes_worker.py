@@ -194,7 +194,7 @@ def toggle_ingress_state():
     remove_state('kubernetes-worker.ingress.available')
 
 
-@when('kubernetes.worker.bins.installed')
+@when('kubernetes.worker.bins.installed', 'kube-dns.available')
 @when_not('kubernetes-worker.ingress.available')
 def render_and_launch_ingress():
     ''' If configuration has ingress RC enabled, launch the ingress load
