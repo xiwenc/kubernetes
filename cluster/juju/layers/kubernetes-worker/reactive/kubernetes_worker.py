@@ -376,16 +376,18 @@ def kubectl(operation, manifest):
 
     if operation == 'delete':
         return call(kubectl + [operation, '-f', manifest])
+        hookenv.log('Executed {}'.format(' '.join(kubectl + [operation, '-f',
+                                                  manifest])))
     else:
         # If no resource was found, attempt creating it
         if found != 0:
             command = kubectl + [operation, '-f', manifest]
             if operation == 'delete':
                 return_code = call(command + ['--now'])
-                hookenv.log('Executed {} got {}').format(command, return_code)
+                hookenv.log('Executed {} got {}'.format(command, return_code))
             else:
                 return_code = call(command)
-                hookenv.log('Executed {} got {}').format(command, return_code)
+                hookenv.log('Executed {} got {}'.format(command, return_code))
                 return return_code == 0
     return False
 
