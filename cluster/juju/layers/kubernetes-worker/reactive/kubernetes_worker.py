@@ -372,24 +372,29 @@ def kubectl(operation, manifest):
      '''
     kubectl = ['kubectl', '--kubeconfig=/srv/kubernetes/config']
     # determine if the kubernetes resources have been declared already
-    found = call(kubectl + ['get', '-f', manifest])
 
+    # Deletions are a special case
     if operation == 'delete':
-        return call(kubectl + [operation, '-f', manifest])
-        hookenv.log('Executed {}'.format(' '.join(kubectl + [operation, '-f',
-                                                  manifest])))
+        # Ensure we immediately remove requested resources with --now
+        command = kubectl + [operation, '-f', manifest, '--now']
+        return_code = call(command)
+        hookenv.log('Executed {} got {}'.format(command, return_code))
+        return return_code == 0
     else:
-        # If no resource was found, attempt creating it
-        if found != 0:
-            command = kubectl + [operation, '-f', manifest]
-            if operation == 'delete':
-                return_code = call(command + ['--now'])
-                hookenv.log('Executed {} got {}'.format(command, return_code))
-            else:
-                return_code = call(command)
-                hookenv.log('Executed {} got {}'.format(command, return_code))
-                return return_code == 0
-    return False
+        # Guard against an error re-creating the same manifest multiple times
+        if command == 'create':
+            found = call(kubectl + ['get', '-f', manifest])
+            # If we already have the definition, its probably safe to assume
+            # creation was true.
+            if found == 0:
+                hookenv.log('Skipping definition for {}'.format(manifest))
+                return True
+        # Execute the requested command that did not match any of the special
+        # cases above
+        command = kubectl + [operation, '-f', manifest]
+        return_code = call(command)
+        hookenv.log('Executed {} got {}'.format(command, return_code))
+        return return_code == 0
 
 
 def _systemctl_is_active(application):
