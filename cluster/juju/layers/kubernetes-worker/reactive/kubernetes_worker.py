@@ -187,6 +187,41 @@ def render_dns_scripts(kube_api, kube_dns):
     restart_unit_services()
 
 
+@when('config.changed.ingress')
+def toggle_ingress_state():
+    ''' Ingress is a toggled state. Remove ingress.available if set when
+    toggled '''
+    remove_state('kubernetes-worker.ingress.available')
+
+
+@when('kubernetes.worker.bins.installed', 'kube-dns.available')
+@when_not('kubernetes-worker.ingress.available')
+def render_and_launch_ingress(kube_dns):
+    ''' If configuration has ingress RC enabled, launch the ingress load
+    balancer and default http backend. Otherwise attempt deletion. '''
+    config = hookenv.config()
+    # If ingress is enabled, launch the ingress controller and open ports
+    if config.get('ingress'):
+        launch_default_ingress_controller()
+        hookenv.open_port(80)
+        hookenv.open_port(443)
+    else:
+        kubectl('delete', '/etc/kubernetes/addons/default-http-backend.yaml')
+        kubectl('delete', '/etc/kubernetes/addons/ingress-replication-controller.yaml')  # noqa
+        hookenv.close_port(80)
+        hookenv.close_port(443)
+
+
+def arch():
+    '''Return the package architecture as a string. Raise an exception if the
+    architecture is not supported by kubernetes.'''
+    # Get the package architecture for this system.
+    architecture = check_output(['dpkg', '--print-architecture']).rstrip()
+    # Convert the binary result into a string.
+    architecture = architecture.decode('utf-8')
+    return architecture
+
+
 def create_config(kube_api):
     '''Create a kubernetes configuration for the worker unit.'''
     server = get_kube_api_server(kube_api)
@@ -279,6 +314,23 @@ def create_kubeconfig(kubeconfig, server, ca, key, certificate, user='ubuntu',
     check_call(split(cmd.format(kubeconfig, context)))
 
 
+def launch_default_ingress_controller():
+    ''' Launch the Kubernetes ingress controller & default backend (404) '''
+    context = {}
+    context['arch'] = arch()
+    addon_path = '/etc/kubernetes/addons/{}'
+    manifest = addon_path.format('default-http-backend.yaml')
+    # Render the default http backend (404) replicationcontroller manifest
+    render('default-http-backend.yaml', manifest, context)
+
+    kubectl('create', manifest)
+    # Render the ingress replication controller manifest
+    manifest = addon_path.format('ingress-replication-controller.yaml')
+    render('ingress-replication-controller.yaml', manifest, context)
+    kubectl('create', manifest)
+    set_state('kubernetes-worker.ingress.available')
+
+
 def restart_unit_services():
     '''Reload the systemd configuration and restart the services.'''
     # Tell systemd to reload configuration from disk for all daemons.
@@ -311,6 +363,38 @@ def get_kube_api_server(kube_api):
     else:
         hookenv.log('Unable to get "server" not services.')
     return server
+
+
+def kubectl(operation, manifest):
+    ''' Wrap the kubectl creation command when using filepath resources
+    :param operation - one of get, create, delete, replace
+    :param manifest - filepath to the manifest
+     '''
+    kubectl = ['kubectl', '--kubeconfig=/srv/kubernetes/config']
+    # determine if the kubernetes resources have been declared already
+
+    # Deletions are a special case
+    if operation == 'delete':
+        # Ensure we immediately remove requested resources with --now
+        command = kubectl + [operation, '-f', manifest, '--now']
+        return_code = call(command)
+        hookenv.log('Executed {} got {}'.format(command, return_code))
+        return return_code == 0
+    else:
+        # Guard against an error re-creating the same manifest multiple times
+        if operation == 'create':
+            found = call(kubectl + ['get', '-f', manifest])
+            # If we already have the definition, its probably safe to assume
+            # creation was true.
+            if found == 0:
+                hookenv.log('Skipping definition for {}'.format(manifest))
+                return True
+        # Execute the requested command that did not match any of the special
+        # cases above
+        command = kubectl + [operation, '-f', manifest]
+        return_code = call(command)
+        hookenv.log('Executed {} got {}'.format(command, return_code))
+        return return_code == 0
 
 
 def _systemctl_is_active(application):
