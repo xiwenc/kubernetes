@@ -382,7 +382,7 @@ def kubectl(operation, manifest):
         return return_code == 0
     else:
         # Guard against an error re-creating the same manifest multiple times
-        if command == 'create':
+        if operation == 'create':
             found = call(kubectl + ['get', '-f', manifest])
             # If we already have the definition, its probably safe to assume
             # creation was true.
