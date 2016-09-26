@@ -324,6 +324,7 @@ def launch_default_ingress_controller():
     render('default-http-backend.yaml', manifest, context)
 
     kubectl('create', manifest)
+
     # Render the ingress replication controller manifest
     manifest = addon_path.format('ingress-replication-controller.yaml')
     render('ingress-replication-controller.yaml', manifest, context)
