@@ -203,6 +203,7 @@ def render_and_launch_ingress(kube_dns):
     # If ingress is enabled, launch the ingress controller and open ports
     if config.get('ingress'):
         launch_default_ingress_controller()
+        scale_ingress_controller()
         hookenv.open_port(80)
         hookenv.open_port(443)
     else:
@@ -211,6 +212,13 @@ def render_and_launch_ingress(kube_dns):
         hookenv.close_port(80)
         hookenv.close_port(443)
 
+def scale_ingress_controller():
+    kubectl = ['kubectl', '--kubeconfig=/srv/kubernetes/config']
+    command = kubectl + ['get', 'nodes', '-o', 'name']
+    output = check_output(command, shell=False)
+    count = len(output.splitlines())
+    command = kubectl + ['scale', '--replicas=%d' % count, 'rc/nginx-ingress-controller']
+    check_call(command)
 
 def arch():
     '''Return the package architecture as a string. Raise an exception if the
