@@ -3,7 +3,6 @@ includes:
   - 'layer:docker'
   - 'layer:tls-client'
   - 'interface:http'
-  - 'interface:ceph-admin'
   - 'interface:sdn-plugin'
   - 'interface:kube-dns'
 repo: https://github.com/kubernetes/kubernetes

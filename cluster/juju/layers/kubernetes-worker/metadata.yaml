@@ -23,8 +23,6 @@ requires:
     interface: http
   kube-dns:
     interface: kube-dns
-  ceph-storage:
-    interface: ceph-admin
 resources:
   kubernetes:
     type: file

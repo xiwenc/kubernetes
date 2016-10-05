@@ -1,5 +1,4 @@
 import os
-import socket
 
 from shlex import split
 from subprocess import call
@@ -212,43 +211,6 @@ def render_and_launch_ingress(kube_dns):
         kubectl('delete', '/etc/kubernetes/addons/ingress-replication-controller.yaml')  # noqa
         hookenv.close_port(80)
         hookenv.close_port(443)
-
-
-@when('ceph-storage.available')
-def ceph_storage(ceph_admin):
-    '''A connection with ceph was created react to the ceph-storage relation
-    events here.'''
-    ceph_context = {
-        'mon_hosts': ceph_admin.mon_hosts(),
-        'fsid': ceph_admin.fsid(),
-        'auth_supported': ceph_admin.auth(),
-        'use_syslog': "true",
-        'ceph_public_network': '',
-        'ceph_cluster_network': '',
-        'loglevel': 1,
-        'hostname': socket.gethostname(),
-    }
-    # Install the ceph common utilities.
-    apt_install(['ceph-common'], fatal=True)
-
-    etc_ceph_directory = '/etc/ceph'
-    if not os.path.isdir(etc_ceph_directory):
-        os.makedirs(etc_ceph_directory)
-    charm_ceph_conf = os.path.join(etc_ceph_directory, 'ceph.conf')
-    try:
-        with open(charm_ceph_conf, 'w') as ceph_conf:
-            ceph_conf.write(render('ceph.conf', ceph_context))
-    except IOError as err:
-        hookenv.log("IOError writing ceph.conf: {}".format(err))
-
-    admin_key = os.path.join(etc_ceph_directory, 'ceph.client.admin.keyring')
-    try:
-        with open(admin_key, 'w') as key_file:
-            key_file.write("[client.admin]\n\tkey = {}\n".format(
-                ceph_admin.key()))
-    except IOError as err:
-        hookenv.log("IOError writing admin.keyring: {}".format(err))
-    set_state('ceph-storage.configured')
 
 
 def arch():
