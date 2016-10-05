@@ -29,6 +29,8 @@ requires:
     interface: etcd
   loadbalancer:
     interface: public-address
+  ceph-storage:
+    interface: ceph-admin
 resources:
   kubernetes:
     type: file
