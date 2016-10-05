@@ -44,11 +44,11 @@ def _reconfigure_docker_for_sdn():
 
 @hook('upgrade-charm')
 def remove_installed_state():
-    remove_state('kubernetes.worker.bins.installed')
+    remove_state('kubernetes-worker.components.installed')
 
 
 @when('docker.available')
-@when_not('kubernetes.worker.bins.installed')
+@when_not('kubernetes-worker.components.installed')
 def install_kubernetes_components():
     ''' Unpack the kubernetes worker binaries '''
     charm_dir = os.getenv('CHARM_DIR')
@@ -89,10 +89,10 @@ def install_kubernetes_components():
         install = ['install', '-v', unpacked, app_path]
         call(install)
 
-    set_state('kubernetes.worker.bins.installed')
+    set_state('kubernetes-worker.components.installed')
 
 
-@when('kubernetes.worker.bins.installed')
+@when('kubernetes-worker.components.installed')
 def set_app_version():
     ''' Declare the application version to juju '''
     cmd = ['kubelet', '--version']
@@ -100,7 +100,7 @@ def set_app_version():
     hookenv.application_version_set(version.split(b' v')[-1].rstrip())
 
 
-@when('kubernetes.worker.bins.installed')
+@when('kubernetes-worker.components.installed')
 @when_not('kube-dns.available')
 def notify_user_transient_status():
     ''' Notify to the user we are in a transient state and the application
@@ -116,7 +116,7 @@ def notify_user_transient_status():
                        'Waiting for cluster-manager to initiate start.')
 
 
-@when('kubernetes.worker.bins.installed', 'kube-dns.available')
+@when('kubernetes-worker.components.installed', 'kube-dns.available')
 def notify_user_converging_status(kube_dns):
     ''' There are different states that the worker can be in, where we are
     waiting for dns, waiting for cluster turnup, or ready to serve
@@ -156,7 +156,7 @@ def container_sdn_setup(sdn):
     set_state('sdn.configured')
 
 
-@when('kubernetes.worker.bins.installed', 'kube-api-endpoint.available',
+@when('kubernetes-worker.components.installed', 'kube-api-endpoint.available',
       'tls_client.ca.saved', 'tls_client.client.certificate.saved',
       'tls_client.client.key.saved')
 @when_not('kube-dns.available')
@@ -169,7 +169,7 @@ def start_worker(kube_api):
     restart_unit_services()
 
 
-@when('kubernetes.worker.bins.installed', 'kube-api-endpoint.available',
+@when('kubernetes-worker.components.installed', 'kube-api-endpoint.available',
       'tls_client.ca.saved', 'tls_client.client.certificate.saved',
       'tls_client.client.key.saved', 'kube-dns.available')
 def render_dns_scripts(kube_api, kube_dns):
@@ -183,6 +183,7 @@ def render_dns_scripts(kube_api, kube_dns):
     opts.add('--cluster-domain', dns['domain'])
 
     create_config(kube_api)
+    set_state('kubernetes-worker.config.created')
     render_init_scripts(kube_api)
     restart_unit_services()
 
@@ -194,7 +195,7 @@ def toggle_ingress_state():
     remove_state('kubernetes-worker.ingress.available')
 
 
-@when('kubernetes.worker.bins.installed', 'kube-dns.available')
+@when('kubernetes-worker.config.created', 'kube-dns.available')
 @when_not('kubernetes-worker.ingress.available')
 def render_and_launch_ingress(kube_dns):
     ''' If configuration has ingress RC enabled, launch the ingress load
