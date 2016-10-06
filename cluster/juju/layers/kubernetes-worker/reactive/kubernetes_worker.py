@@ -6,40 +6,19 @@ from subprocess import check_call
 from subprocess import check_output
 
 from charms import layer
-from charms.docker import DockerOpts
 from charms.reactive import hook
 from charms.reactive import remove_state
 from charms.reactive import set_state
 from charms.reactive import when
 from charms.reactive import when_not
+from charms.reactive.helpers import data_changed
 
 from charmhelpers.core import hookenv
-from charmhelpers.core import host
-from charmhelpers.fetch import apt_install
+from charmhelpers.core.host import restart_on_change
 
 from charms.kubernetes.flagmanager import FlagManager
 
 from charms.templating.jinja2 import render
-
-
-def _reconfigure_docker_for_sdn():
-    ''' By default docker uses the docker0 bridge for container networking.
-    This method removes the default docker bridge, and reconfigures the
-    DOCKER_OPTS to use the flannel networking bridge '''
-
-    hookenv.status_set('maintenance',
-                       'Reconfiguring container runtime network bridge.')
-    host.service_stop('docker')
-    apt_install(['bridge-utils'], fatal=True)
-    # cmd = "ifconfig docker0 down"
-    # ifconfig doesn't always work. use native linux networking commands to
-    # mark the bridge as inactive.
-    cmd = ['ip', 'link', 'set', 'docker0', 'down']
-    check_call(cmd)
-
-    cmd = ['brctl', 'delbr', 'docker0']
-    check_call(cmd)
-    set_state('docker.restart')
 
 
 @hook('upgrade-charm')
@@ -117,10 +96,15 @@ def notify_user_transient_status():
 
 
 @when('kubernetes-worker.components.installed', 'kube-dns.available')
-def notify_user_converging_status(kube_dns):
-    ''' There are different states that the worker can be in, where we are
+def charm_status(kube_dns):
+    '''Update the status message with the current status of kubelet.'''
+    update_kubelet_status()
+
+
+def update_kubelet_status():
+    ''' There are different states that the kubelt can be in, where we are
     waiting for dns, waiting for cluster turnup, or ready to serve
-    applications'''
+    applications.'''
     # Daemon options are managed by the FlagManager class
     kubelet_opts = FlagManager('kubelet')
 
@@ -129,31 +113,12 @@ def notify_user_converging_status(kube_dns):
     if (_systemctl_is_active('kubelet') and
        '--cluster-dns' not in kubelet_opts.data):
         hookenv.status_set('waiting', 'Waiting for cluster DNS.')
-    elif(_systemctl_is_active('kubelet') and
-         '--cluster-dns' in kubelet_opts.data):
+    elif (_systemctl_is_active('kubelet') and
+          '--cluster-dns' in kubelet_opts.data):
         hookenv.status_set('active', 'Kubernetes worker running.')
     # if kubelet is not running, we're waiting on something else to converge
-    elif(not _systemctl_is_active('kubelet')):
+    elif (not _systemctl_is_active('kubelet')):
         hookenv.status_set('waiting', 'Waiting for kubelet to start.')
-
-
-@when('sdn-plugin.available', 'docker.available')
-@when_not('sdn.configured')
-def container_sdn_setup(sdn):
-    ''' Receive the information from the SDN plugin, and render the docker
-    engine options. '''
-    hookenv.status_set('maintenance',
-                       'Configuring container runtime with SDN.')
-    sdn_config = sdn.get_sdn_config()
-
-    opts = DockerOpts()
-    opts.add('bip', sdn_config['subnet'])
-    opts.add('mtu', sdn_config['mtu'])
-
-    with open('/etc/default/docker', 'w') as stream:
-        stream.write('DOCKER_OPTS="{}"'.format(opts.to_s()))
-    _reconfigure_docker_for_sdn()
-    set_state('sdn.configured')
 
 
 @when('kubernetes-worker.components.installed', 'kube-api-endpoint.available',
@@ -161,12 +126,15 @@ def container_sdn_setup(sdn):
       'tls_client.client.key.saved')
 @when_not('kube-dns.available')
 def start_worker(kube_api):
-    '''We have related to either an api server or a load balancer connected
-    to the apiserver along with the certificate and keys. Render the init
-    scripts.'''
-    create_config(kube_api)
-    render_init_scripts(kube_api)
-    restart_unit_services()
+    '''Need to start the worker services before the api-server can schedule
+    required addons like DNS inside the workers.'''
+    # Get the list of kubernetes api servers from the relationship object.
+    servers = get_kube_api_servers(kube_api)
+    if data_changed('kube-api-servers', servers):
+        create_config(servers[0])
+        render_init_scripts(servers)
+        restart_unit_services()
+        update_kubelet_status()
 
 
 @when('kubernetes-worker.components.installed', 'kube-api-endpoint.available',
@@ -174,18 +142,22 @@ def start_worker(kube_api):
       'tls_client.client.key.saved', 'kube-dns.available')
 def render_dns_scripts(kube_api, kube_dns):
     ''' The dns is now available, re-render init config with DNS data. '''
+    # GEt the list of kubernetes api servers from the relationship object.
+    servers = get_kube_api_servers(kube_api)
     # Fetch the DNS data on the relationship.
     dns = kube_dns.details()
-    # Initialize a FlagManager object to add flags to unit data.
-    opts = FlagManager('kubelet')
-    # Append the DNS flags + data to the FlagManager object.
-    opts.add('--cluster-dns', '{0}:{1}'.format(dns['sdn-ip'], dns['port']))
-    opts.add('--cluster-domain', dns['domain'])
-
-    create_config(kube_api)
-    set_state('kubernetes-worker.config.created')
-    render_init_scripts(kube_api)
-    restart_unit_services()
+    if (data_changed('kube-api-servers', servers) or
+            data_changed('kube-dns', dns)):
+        # Initialize a FlagManager object to add flags to unit data.
+        opts = FlagManager('kubelet')
+        # Append the DNS flags + data to the FlagManager object.
+        opts.add('--cluster-dns', '{0}:{1}'.format(dns['sdn-ip'], dns['port']))
+        opts.add('--cluster-domain', dns['domain'])
+        create_config(servers[0])
+        render_init_scripts(servers)
+        set_state('kubernetes-worker.config.created')
+        restart_unit_services()
+        update_kubelet_status()
 
 
 @when('config.changed.ingress')
@@ -193,6 +165,15 @@ def toggle_ingress_state():
     ''' Ingress is a toggled state. Remove ingress.available if set when
     toggled '''
     remove_state('kubernetes-worker.ingress.available')
+
+
+@when('docker.sdn.configured')
+def sdn_changed():
+    '''The Software Defined Network changed on the container so restart the
+    kubernetes services.'''
+    restart_unit_services()
+    update_kubelet_status()
+    remove_state('docker.sdn.configured')
 
 
 @when('kubernetes-worker.config.created', 'kube-dns.available')
@@ -207,6 +188,7 @@ def render_and_launch_ingress(kube_dns):
         hookenv.open_port(80)
         hookenv.open_port(443)
     else:
+        hookenv.log('Deleting the http backend and ingress.')
         kubectl('delete', '/etc/kubernetes/addons/default-http-backend.yaml')
         kubectl('delete', '/etc/kubernetes/addons/ingress-replication-controller.yaml')  # noqa
         hookenv.close_port(80)
@@ -223,9 +205,8 @@ def arch():
     return architecture
 
 
-def create_config(kube_api):
+def create_config(server):
     '''Create a kubernetes configuration for the worker unit.'''
-    server = get_kube_api_server(kube_api)
     # Get the options from the tls-client layer.
     layer_options = layer.options('tls-client')
     # Get all the paths to the tls information required for kubeconfig.
@@ -247,7 +228,7 @@ def create_config(kube_api):
                       user='kubelet')
 
 
-def render_init_scripts(kube_api):
+def render_init_scripts(api_servers):
     ''' We have related to either an api server or a load balancer connected
     to the apiserver. Render the config files and prepare for launch '''
     context = {}
@@ -259,14 +240,8 @@ def render_init_scripts(kube_api):
     context['client_cert_path'] = layer_options.get('client_certificate_path')
     context['client_key_path'] = layer_options.get('client_key_path')
 
-    hosts = []
-    for serv in kube_api.services():
-        for unit in serv['hosts']:
-            hosts.append('https://{}:{}'.format(unit['hostname'],
-                                                unit['port']))
-            hookenv.log(hosts)
     unit_name = os.getenv('JUJU_UNIT_NAME').replace('/', '-')
-    context.update({'kube_api_endpoint': ','.join(hosts),
+    context.update({'kube_api_endpoint': ','.join(api_servers),
                     'JUJU_UNIT_NAME': unit_name})
 
     # Create a flag manager for kubelet to render kubelet_opts.
@@ -323,13 +298,13 @@ def launch_default_ingress_controller():
     manifest = addon_path.format('default-http-backend.yaml')
     # Render the default http backend (404) replicationcontroller manifest
     render('default-http-backend.yaml', manifest, context)
-
+    hookenv.log('Creating the default http backend.')
     kubectl('create', manifest)
-
     # Render the ingress replication controller manifest
     manifest = addon_path.format('ingress-replication-controller.yaml')
     render('ingress-replication-controller.yaml', manifest, context)
     kubectl('create', manifest)
+    hookenv.log('Creating the ingress replication controller.')
     set_state('kubernetes-worker.ingress.available')
 
 
@@ -337,7 +312,6 @@ def restart_unit_services():
     '''Reload the systemd configuration and restart the services.'''
     # Tell systemd to reload configuration from disk for all daemons.
     call(['systemctl', 'daemon-reload'])
-
     # Ensure the services available after rebooting.
     call(['systemctl', 'enable', 'kubelet.service'])
     call(['systemctl', 'enable', 'kube-proxy.service'])
@@ -347,24 +321,16 @@ def restart_unit_services():
     call(['systemctl', 'restart', 'kube-proxy'])
 
 
-def get_kube_api_server(kube_api):
+def get_kube_api_servers(kube_api):
     '''Return the kubernetes api server address and port for this
     relationship.'''
-    # Get the services from the relation object.
-    services = kube_api.services()
-    # There is a bug where Kubernetes components do not handle multiple master
-    # or server addresses so only return one address from the list.
-    if len(services) > 0:
-        hosts = services[0]['hosts']
-        if len(hosts) > 0:
-            server = 'https://{0}:{1}'.format(hosts[0]['hostname'],
-                                              hosts[0]['port'])
-            hookenv.log('Using server: {0}'.format(server))
-        else:
-            hookenv.log('Unable to get "server" not enough hosts.')
-    else:
-        hookenv.log('Unable to get "server" not services.')
-    return server
+    hosts = []
+    # Iterate over every service from the relation object.
+    for service in kube_api.services():
+        for unit in service['hosts']:
+            hosts.append('https://{0}:{1}'.format(unit['hostname'],
+                                                  unit['port']))
+    return hosts
 
 
 def kubectl(operation, manifest):
