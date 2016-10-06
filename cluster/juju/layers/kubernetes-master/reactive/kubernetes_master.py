@@ -30,6 +30,7 @@ def reset_states_for_delivery():
                 'kube-controller-manager',
                 'kube-scheduler']
     for service in services:
+        hookenv.log('Stopping {0} service.'.format(service))
         host.service_stop(service)
     remove_state('kubernetes-master.components.started')
     remove_state('kubernetes-master.components.installed')
@@ -143,6 +144,7 @@ def start_master(etcd, tls):
                 'kube-controller-manager',
                 'kube-scheduler']
     for service in services:
+        hookenv.log('Starting {0} service.'.format(service))
         host.service_start(service)
     hookenv.open_port(6443)
     hookenv.status_set('active', 'Kubernetes master services ready.')
@@ -224,6 +226,7 @@ def launch_kubernetes_dashboard():
     ''' Launch the Kubernetes dashboard. If not enabled, attempt deletion '''
     manifest = '/etc/kubernetes/addons/dashboard.yaml'
     if hookenv.config('dashboard'):
+        hookenv.log('Launching kubernetes dashboard.')
         context = {}
         context['arch'] = arch()
         render('kubernetes-dashboard.yaml', manifest, context)
@@ -231,6 +234,7 @@ def launch_kubernetes_dashboard():
         call(cmd)
         set_state('kubernetes.dashboard.available')
     else:
+        hookenv.log('Removing kubernetes dashboard.')
         cmd = ['kubectl', 'delete', '-f', manifest]
         try:
             call(cmd)
@@ -295,8 +299,9 @@ def create_self_config(ca, client):
 def launch_dns():
     '''Create the "kube-system" namespace, the kubedns resource controller, and
     the kubedns service. '''
-    hookenv.status_set('maintenance',
-                       'Rendering the Kubernetes DNS files.')
+    message = 'Rendering the Kubernetes DNS files.'
+    hookenv.log(message)
+    hookenv.status_set('maintenance', message)
     # Render the DNS files with the cider information.
     render_files()
     # Run a command to check if the apiserver is responding.

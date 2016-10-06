@@ -96,10 +96,15 @@ def notify_user_transient_status():
 
 
 @when('kubernetes-worker.components.installed', 'kube-dns.available')
-def notify_user_converging_status(kube_dns):
-    ''' There are different states that the worker can be in, where we are
+def charm_status(kube_dns):
+    '''Update the status message with the current status of kubelet.'''
+    update_kubelet_status()
+
+
+def update_kubelet_status():
+    ''' There are different states that the kubelt can be in, where we are
     waiting for dns, waiting for cluster turnup, or ready to serve
-    applications'''
+    applications.'''
     # Daemon options are managed by the FlagManager class
     kubelet_opts = FlagManager('kubelet')
 
@@ -108,11 +113,11 @@ def notify_user_converging_status(kube_dns):
     if (_systemctl_is_active('kubelet') and
        '--cluster-dns' not in kubelet_opts.data):
         hookenv.status_set('waiting', 'Waiting for cluster DNS.')
-    elif(_systemctl_is_active('kubelet') and
-         '--cluster-dns' in kubelet_opts.data):
+    elif (_systemctl_is_active('kubelet') and
+          '--cluster-dns' in kubelet_opts.data):
         hookenv.status_set('active', 'Kubernetes worker running.')
     # if kubelet is not running, we're waiting on something else to converge
-    elif(not _systemctl_is_active('kubelet')):
+    elif (not _systemctl_is_active('kubelet')):
         hookenv.status_set('waiting', 'Waiting for kubelet to start.')
 
 
@@ -129,6 +134,7 @@ def start_worker(kube_api):
         create_config(servers[0])
         render_init_scripts(servers)
         restart_unit_services()
+        update_kubelet_status()
 
 
 @when('kubernetes-worker.components.installed', 'kube-api-endpoint.available',
@@ -151,6 +157,7 @@ def render_dns_scripts(kube_api, kube_dns):
         render_init_scripts(servers)
         set_state('kubernetes-worker.config.created')
         restart_unit_services()
+        update_kubelet_status()
 
 
 @when('config.changed.ingress')
@@ -165,19 +172,8 @@ def sdn_changed():
     '''The Software Defined Network changed on the container so restart the
     kubernetes services.'''
     restart_unit_services()
+    update_kubelet_status()
     remove_state('docker.sdn.configured')
-
-
-@restart_on_change({
-    '/etc/default/docker': ['kubelet', 'kube-proxy'],
-    '/etc/default/kubelet': ['kubelet'],
-    '/lib/systemd/system/kubelet': ['kubelet'],
-    '/etc/default/kube-proxy': ['kube-proxy'],
-    '/lib/systemd/system/kube-proxy': ['kube-proxy'],
-})
-def restart_services():
-    '''When the configuration files change, restart the system services.'''
-    hookenv.log('Restart services was triggered.')
 
 
 @when('kubernetes-worker.config.created', 'kube-dns.available')
@@ -192,6 +188,7 @@ def render_and_launch_ingress(kube_dns):
         hookenv.open_port(80)
         hookenv.open_port(443)
     else:
+        hookenv.log('Deleting the http backend and ingress.')
         kubectl('delete', '/etc/kubernetes/addons/default-http-backend.yaml')
         kubectl('delete', '/etc/kubernetes/addons/ingress-replication-controller.yaml')  # noqa
         hookenv.close_port(80)
@@ -301,13 +298,13 @@ def launch_default_ingress_controller():
     manifest = addon_path.format('default-http-backend.yaml')
     # Render the default http backend (404) replicationcontroller manifest
     render('default-http-backend.yaml', manifest, context)
-
+    hookenv.log('Creating the default http backend.')
     kubectl('create', manifest)
-
     # Render the ingress replication controller manifest
     manifest = addon_path.format('ingress-replication-controller.yaml')
     render('ingress-replication-controller.yaml', manifest, context)
     kubectl('create', manifest)
+    hookenv.log('Creating the ingress replication controller.')
     set_state('kubernetes-worker.ingress.available')
 
 
@@ -315,7 +312,6 @@ def restart_unit_services():
     '''Reload the systemd configuration and restart the services.'''
     # Tell systemd to reload configuration from disk for all daemons.
     call(['systemctl', 'daemon-reload'])
-
     # Ensure the services available after rebooting.
     call(['systemctl', 'enable', 'kubelet.service'])
     call(['systemctl', 'enable', 'kube-proxy.service'])
