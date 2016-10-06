@@ -214,6 +214,7 @@ def render_and_launch_ingress(kube_dns):
         hookenv.close_port(443)
 
 def scale_ingress_controller():
+    ''' Scale the number of ingress controller replicas to match the number of nodes. '''
     kubectl = ['kubectl', '--kubeconfig=/srv/kubernetes/config']
     command = kubectl + ['get', 'nodes', '-o', 'name']
     output = check_output(command, shell=False)
