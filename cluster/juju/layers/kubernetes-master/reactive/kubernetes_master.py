@@ -31,13 +31,13 @@ def reset_states_for_delivery():
                 'kube-scheduler']
     for service in services:
         host.service_stop(service)
-    remove_state('kube_master_components.started')
-    remove_state('kube_master_components.installed')
+    remove_state('kubernetes-master.components.started')
+    remove_state('kubernetes-master.components.installed')
 
 
-@when_not('kube_master_components.installed')
+@when_not('kubernetes-master.components.installed')
 def install():
-    '''Unpack the Kubernetes master binary files.'''
+    '''Unpack and put the Kubernetes master files on the path.'''
     # Get the resource via resource_get
     try:
         archive = hookenv.resource_get('kubernetes')
@@ -79,10 +79,10 @@ def install():
         if return_code != 0:
             raise Exception('Unable to install {0}'.format(service))
 
-    set_state('kube_master_components.installed')
+    set_state('kubernetes-master.components.installed')
 
 
-@when('kube_master_components.installed')
+@when('kubernetes-master.components.installed')
 @when_not('authentication.setup')
 def setup_authentication():
     '''Setup basic authentication and token access for the cluster.'''
@@ -113,7 +113,7 @@ def setup_authentication():
     set_state('authentication.setup')
 
 
-@when('kube_master_components.installed')
+@when('kubernetes-master.components.installed')
 def set_app_version():
     ''' Declare the application version to juju '''
     version = check_output(['kube-apiserver', '--version'])
@@ -121,15 +121,15 @@ def set_app_version():
 
 
 @when('kube-dns.available', 'kube-sdn.configured',
-      'kube_master_components.installed')
+      'kubernetes-master.components.installed')
 def ready_messaging():
     ''' Signal at the end of the run that we are running. '''
     hookenv.status_set('active', 'Kubernetes master running.')
 
 
-@when('etcd.available', 'kube_master_components.installed',
+@when('etcd.available', 'kubernetes-master.components.installed',
       'kube-sdn.configured', 'certificates.server.cert.available')
-@when_not('kube_master_components.started')
+@when_not('kubernetes-master.components.started')
 def start_master(etcd, tls):
     '''Run the Kubernetes master components.'''
     hookenv.status_set('maintenance',
@@ -146,7 +146,7 @@ def start_master(etcd, tls):
         host.service_start(service)
     hookenv.open_port(6443)
     hookenv.status_set('active', 'Kubernetes master services ready.')
-    set_state('kube_master_components.started')
+    set_state('kubernetes-master.components.started')
 
 
 @when('kube-dns.available', 'cluster-dns.connected', 'sdn-plugin.available')
@@ -201,7 +201,7 @@ def push_api_data(kube_api):
     kube_api.set_api_port('6443')
 
 
-@when('kube_master_components.installed', 'sdn-plugin.available')
+@when('kubernetes-master.components.installed', 'sdn-plugin.available')
 def gather_sdn_data(sdn_plugin):
     sdn_data = sdn_plugin.get_sdn_config()
     if not sdn_data['cidr'] or not sdn_data['subnet'] or not sdn_data['mtu']:
@@ -238,7 +238,7 @@ def launch_kubernetes_dashboard():
             pass
 
 
-@when('kube_master_components.installed', 'kube-sdn.configured',
+@when('kubernetes-master.components.installed', 'kube-sdn.configured',
       'sdn-plugin.available')
 @when_not('kube-dns.available')
 def start_kube_dns(sdn_plugin):
@@ -270,8 +270,8 @@ def start_kube_dns(sdn_plugin):
     set_state('kube-dns.available')
 
 
-@when('loadbalancer.available', 'certificates.ca.available',
-      'certificates.client.cert.available', 'kube_master_components.installed')
+@when('kubernetes-master.components.installed', 'loadbalancer.available',
+      'certificates.ca.available', 'certificates.client.cert.available')
 def loadbalancer_kubeconfig(loadbalancer, ca, client):
     # Get the potential list of loadbalancers from the relation object.
     hosts = loadbalancer.get_addresses_ports()
@@ -283,8 +283,8 @@ def loadbalancer_kubeconfig(loadbalancer, ca, client):
     build_kubeconfig(server)
 
 
-@when('certificates.ca.available', 'certificates.client.cert.available',
-      'kube_master_components.installed')
+@when('kubernetes-master.components.installed',
+      'certificates.ca.available', 'certificates.client.cert.available')
 @when_not('loadbalancer.available')
 def create_self_config(ca, client):
     '''Create a kubernetes configuration for the master unit.'''

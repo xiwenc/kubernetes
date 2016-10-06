@@ -1,0 +1,2 @@
+restart-master:
+  description: restart the apiserver, controller-manager, and scheduler
