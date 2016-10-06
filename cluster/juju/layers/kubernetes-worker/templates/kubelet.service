@@ -17,7 +17,6 @@ ExecStart=/usr/local/bin/kubelet \
 	    $KUBE_ALLOW_PRIV \
 	    $KUBELET_ARGS
 Restart=on-failure
-KillMode=process
 
 [Install]
 WantedBy=multi-user.target
