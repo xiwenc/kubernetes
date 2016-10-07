@@ -4,6 +4,7 @@ from shlex import split
 from subprocess import call
 from subprocess import check_call
 from subprocess import check_output
+from socket import gethostname
 
 from charms import layer
 from charms.reactive import hook
@@ -25,6 +26,12 @@ from charms.templating.jinja2 import render
 def remove_installed_state():
     remove_state('kubernetes-worker.components.installed')
 
+@hook('stop')
+def remove_this_node():
+    ''' Deletes this unit's node when the unit is destroyed. '''
+    kubectl = ['kubectl', '--kubeconfig=/srv/kubernetes/config']
+    command = kubectl + ['delete', 'node', gethostname()]
+    output = check_call(command, shell=False)
 
 @when('docker.available')
 @when_not('kubernetes-worker.components.installed')
