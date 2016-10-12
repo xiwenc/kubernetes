@@ -10,7 +10,7 @@ includes:
   - 'interface:public-address'
 options:
   basic:
-    packages: 
+    packages:
       - 'nfs-common'
   tls-client:
     ca_certificate_path: '/srv/kubernetes/ca.crt'
