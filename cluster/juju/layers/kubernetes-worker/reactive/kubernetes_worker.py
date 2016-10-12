@@ -354,15 +354,16 @@ def get_kube_api_servers(kube_api):
 
 
 def kubectl(*args):
+    ''' Run a kubectl cli command with a config file. Returns stdout and throws
+    an error if the command fails. '''
     command = ['kubectl', '--kubeconfig=/srv/kubernetes/config'] + list(args)
     hookenv.log('Executing {}'.format(command))
     return check_output(command)
 
 
 def kubectl_success(*args):
-    ''' Runs kubectl with the given args. Returns True if succesful, false if
-    not.
-    '''
+    ''' Runs kubectl with the given args. Returns True if succesful, False if
+    not. '''
     try:
         kubectl(*args)
         return True
