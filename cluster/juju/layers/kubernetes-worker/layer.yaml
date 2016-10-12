@@ -7,6 +7,9 @@ includes:
   - 'interface:kube-dns'
 repo: https://github.com/kubernetes/kubernetes
 options:
+  basic:
+    packages: 
+      - nfs-common
   tls-client:
     ca_certificate_path: '/srv/kubernetes/ca.crt'
     server_certificate_path: '/srv/kubernetes/server.crt'
