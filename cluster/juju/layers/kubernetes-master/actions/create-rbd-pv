@@ -46,7 +46,7 @@ def main():
         return
 
     if not validate_unique_volume_name(context['RBD_NAME']):
-        action_fail('Volume name collision detected. Volume creation Aborted.')
+        action_fail('Volume name collision detected. Volume creation aborted.')
         return
 
     context['monitors'] = get_monitors()

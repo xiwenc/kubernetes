@@ -40,7 +40,8 @@ class FlagManager:
         opts.add('label', 'foo')
         opts.add('label', 'foo, bar, baz')
         opts.add('flagonly', None)
-        opts.add('cluster-store', 'consul://a:4001,b:4001,c:4001/swarm', strict=True)
+        opts.add('cluster-store', 'consul://a:4001,b:4001,c:4001/swarm',
+                 strict=True)
         '''
         if strict:
             self.data['{}-strict'.format(key)] = value
