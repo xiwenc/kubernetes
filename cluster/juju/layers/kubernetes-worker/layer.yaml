@@ -1,3 +1,4 @@
+repo: https://github.com/kubernetes/kubernetes.git
 includes:
   - 'layer:basic'
   - 'layer:docker'
@@ -5,8 +6,10 @@ includes:
   - 'interface:http'
   - 'interface:sdn-plugin'
   - 'interface:kube-dns'
-repo: https://github.com/kubernetes/kubernetes
 options:
+  basic:
+    packages:
+      - 'nfs-common'
   tls-client:
     ca_certificate_path: '/srv/kubernetes/ca.crt'
     server_certificate_path: '/srv/kubernetes/server.crt'

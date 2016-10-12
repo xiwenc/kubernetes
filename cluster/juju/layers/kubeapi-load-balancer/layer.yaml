@@ -1,8 +1,8 @@
+repo: https://github.com/kubernetes/kubernetes.git
 includes:
-  - layer:nginx
-  - layer:tls-client
-  - interface:public-address
-repo: https://github.com/juju-solutions/kubernetes-load-balancer
+  - 'layer:nginx'
+  - 'layer:tls-client'
+  - 'interface:public-address'
 options:
   tls-client:
     ca_certificate_path: '/srv/kubernetes/ca.crt'
