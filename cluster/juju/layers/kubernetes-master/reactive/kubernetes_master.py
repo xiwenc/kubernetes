@@ -1,7 +1,9 @@
+import base64
 import os
+import random
 import socket
 import string
-import random
+
 
 from shlex import split
 from subprocess import call
@@ -21,6 +23,7 @@ from charms.kubernetes.flagmanager import FlagManager
 from charmhelpers.core import hookenv
 from charmhelpers.core import host
 from charmhelpers.core.templating import render
+from charmhelpers.fetch import apt_install
 
 
 @hook('upgrade-charm')
@@ -294,6 +297,92 @@ def create_self_config(ca, client):
     '''Create a kubernetes configuration for the master unit.'''
     server = 'https://{0}:{1}'.format(hookenv.unit_get('public-address'), 6443)
     build_kubeconfig(server)
+
+
+@when('ceph-storage.available')
+def ceph_state_control(ceph_admin):
+    ''' Determine if we should remove the state that controls the re-render
+    and execution of the ceph-relation-changed event because there
+    are changes in the relationship data, and we should re-render any
+    configs, keys, and/or service pre-reqs '''
+
+    ceph_relation_data = {
+        'mon_hosts': ceph_admin.mon_hosts(),
+        'fsid': ceph_admin.fsid(),
+        'auth_supported': ceph_admin.auth(),
+        'hostname': socket.gethostname(),
+        'key': ceph_admin.key()
+    }
+
+    # Re-execute the rendering if the data has changed.
+    if data_changed('ceph-config', ceph_relation_data):
+        remove_state('ceph-storage.configured')
+
+
+@when('ceph-storage.available')
+@when_not('ceph-storage.configured')
+def ceph_storage(ceph_admin):
+    '''Ceph on kubernetes will require a few things - namely a ceph
+    configuration, and the ceph secret key file used for authentication.
+    This method will install the client package, and render the requisit files
+    in order to consume the ceph-storage relation.'''
+    ceph_context = {
+        'mon_hosts': ceph_admin.mon_hosts(),
+        'fsid': ceph_admin.fsid(),
+        'auth_supported': ceph_admin.auth(),
+        'use_syslog': "true",
+        'ceph_public_network': '',
+        'ceph_cluster_network': '',
+        'loglevel': 1,
+        'hostname': socket.gethostname(),
+    }
+    # Install the ceph common utilities.
+    apt_install(['ceph-common'], fatal=True)
+
+    etc_ceph_directory = '/etc/ceph'
+    if not os.path.isdir(etc_ceph_directory):
+        os.makedirs(etc_ceph_directory)
+    charm_ceph_conf = os.path.join(etc_ceph_directory, 'ceph.conf')
+    # Render the ceph configuration from the ceph conf template
+    render('ceph.conf', charm_ceph_conf, ceph_context)
+
+    # The key can rotate independently of other ceph config, so validate it
+    admin_key = os.path.join(etc_ceph_directory,
+                             'ceph.client.admin.keyring')
+    try:
+        with open(admin_key, 'w') as key_file:
+            key_file.write("[client.admin]\n\tkey = {}\n".format(
+                ceph_admin.key()))
+    except IOError as err:
+        hookenv.log("IOError writing admin.keyring: {}".format(err))
+
+    # Enlist the ceph-admin key as a kubernetes secret
+    if ceph_admin.key():
+        encoded_key = base64.b64encode(ceph_admin.key().encode('utf-8'))
+    else:
+        # We didn't have a key, and cannot proceed. Do not set state and
+        # allow this method to re-execute
+        return
+
+    context = {'secret': encoded_key.decode('ascii')}
+    render('ceph-secret.yaml', '/tmp/ceph-secret.yaml', context)
+    try:
+        # At first glance this is deceptive. The apply stanza will create if
+        # it doesn't exist, otherwise it will update the entry, ensuring our
+        # ceph-secret is always reflective of what we have in /etc/ceph
+        # assuming we have invoked this anytime that file would change.
+        cmd = ['kubectl', 'apply', '-f', '/tmp/ceph-secret.yaml']
+        check_call(cmd)
+        os.remove('/tmp/ceph-secret.yaml')
+    except:
+        # the enlistment in kubernetes failed, return and prepare for re-exec
+        return
+
+    # when complete, set a state relating to configuration of the storage
+    # backend that will allow other modules to hook into this and verify we
+    # have performed the necessary pre-req steps to interface with a ceph
+    # deployment.
+    set_state('ceph-storage.configured')
 
 
 def launch_dns():

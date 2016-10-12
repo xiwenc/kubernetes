@@ -1,29 +1,40 @@
 import os
 
 from shlex import split
-from subprocess import call
-from subprocess import check_call
-from subprocess import check_output
+from subprocess import call, check_call, check_output
+from subprocess import CalledProcessError
+from socket import gethostname
 
 from charms import layer
 from charms.reactive import hook
-from charms.reactive import remove_state
-from charms.reactive import set_state
-from charms.reactive import when
-from charms.reactive import when_not
+from charms.reactive import set_state, remove_state
+from charms.reactive import when, when_not
 from charms.reactive.helpers import data_changed
+from charms.kubernetes.flagmanager import FlagManager
+from charms.templating.jinja2 import render
 
 from charmhelpers.core import hookenv
-from charmhelpers.core.host import restart_on_change
-
-from charms.kubernetes.flagmanager import FlagManager
-
-from charms.templating.jinja2 import render
+from charmhelpers.core.host import service_stop
 
 
 @hook('upgrade-charm')
 def remove_installed_state():
     remove_state('kubernetes-worker.components.installed')
+
+
+@hook('stop')
+def shutdown():
+    ''' When this unit is destroyed:
+        - delete the current node
+        - stop the kubelet service
+        - stop the kube-proxy service
+        - remove the 'kubernetes-worker.components.installed' state
+    '''
+    kubectl('delete', 'node', gethostname())
+    service_stop('kubelet')
+    service_stop('kube-proxy')
+    remove_state('kubernetes-worker.components.installed')
+
 
 @when('docker.available')
 @when_not('kubernetes-worker.components.installed')
@@ -188,21 +199,21 @@ def render_and_launch_ingress(kube_dns):
         hookenv.open_port(443)
     else:
         hookenv.log('Deleting the http backend and ingress.')
-        kubectl('delete', '/etc/kubernetes/addons/default-http-backend.yaml')
-        kubectl('delete', '/etc/kubernetes/addons/ingress-replication-controller.yaml')  # noqa
+        kubectl_manifest('delete', '/etc/kubernetes/addons/default-http-backend.yaml')
+        kubectl_manifest('delete', '/etc/kubernetes/addons/ingress-replication-controller.yaml')  # noqa
         hookenv.close_port(80)
         hookenv.close_port(443)
 
+
 @when('kubernetes-worker.ingress.available')
 def scale_ingress_controller():
-    ''' Scale the number of ingress controller replicas to match the number of nodes. '''
-    kubectl = ['kubectl', '--kubeconfig=/srv/kubernetes/config']
-    command = kubectl + ['get', 'nodes', '-o', 'name']
-    output = check_output(command, shell=False)
+    ''' Scale the number of ingress controller replicas to match the number of
+    nodes. '''
+    output = kubectl('get', 'nodes', '-o', 'name')
     count = len(output.splitlines())
     if data_changed('ingress-controller-replicas', count):
-        command = kubectl + ['scale', '--replicas=%d' % count, 'rc/nginx-ingress-controller']
-        check_call(command)
+        kubectl('scale', '--replicas=%d' % count, 'rc/nginx-ingress-controller')
+
 
 def arch():
     '''Return the package architecture as a string. Raise an exception if the
@@ -308,11 +319,11 @@ def launch_default_ingress_controller():
     # Render the default http backend (404) replicationcontroller manifest
     render('default-http-backend.yaml', manifest, context)
     hookenv.log('Creating the default http backend.')
-    kubectl('create', manifest)
+    kubectl_manifest('create', manifest)
     # Render the ingress replication controller manifest
     manifest = addon_path.format('ingress-replication-controller.yaml')
     render('ingress-replication-controller.yaml', manifest, context)
-    kubectl('create', manifest)
+    kubectl_manifest('create', manifest)
     hookenv.log('Creating the ingress replication controller.')
     set_state('kubernetes-worker.ingress.available')
 
@@ -342,36 +353,43 @@ def get_kube_api_servers(kube_api):
     return hosts
 
 
-def kubectl(operation, manifest):
+def kubectl(*args):
+    command = ['kubectl', '--kubeconfig=/srv/kubernetes/config'] + list(args)
+    hookenv.log('Executing {}'.format(command))
+    return check_output(command)
+
+
+def kubectl_success(*args):
+    ''' Runs kubectl with the given args. Returns True if succesful, false if
+    not.
+    '''
+    try:
+        kubectl(*args)
+        return True
+    except CalledProcessError:
+        return False
+
+
+def kubectl_manifest(operation, manifest):
     ''' Wrap the kubectl creation command when using filepath resources
     :param operation - one of get, create, delete, replace
     :param manifest - filepath to the manifest
      '''
-    kubectl = ['kubectl', '--kubeconfig=/srv/kubernetes/config']
-    # determine if the kubernetes resources have been declared already
-
     # Deletions are a special case
     if operation == 'delete':
         # Ensure we immediately remove requested resources with --now
-        command = kubectl + [operation, '-f', manifest, '--now']
-        return_code = call(command)
-        hookenv.log('Executed {} got {}'.format(command, return_code))
-        return return_code == 0
+        return kubectl_success(operation, '-f', manifest, '--now')
     else:
         # Guard against an error re-creating the same manifest multiple times
         if operation == 'create':
-            found = call(kubectl + ['get', '-f', manifest])
             # If we already have the definition, its probably safe to assume
             # creation was true.
-            if found == 0:
+            if kubectl_success('get', '-f', manifest):
                 hookenv.log('Skipping definition for {}'.format(manifest))
                 return True
         # Execute the requested command that did not match any of the special
         # cases above
-        command = kubectl + [operation, '-f', manifest]
-        return_code = call(command)
-        hookenv.log('Executed {} got {}'.format(command, return_code))
-        return return_code == 0
+        return kubectl_success(operation, '-f', manifest)
 
 
 def _systemctl_is_active(application):
