@@ -199,8 +199,10 @@ def render_and_launch_ingress(kube_dns):
         hookenv.open_port(443)
     else:
         hookenv.log('Deleting the http backend and ingress.')
-        kubectl_manifest('delete', '/etc/kubernetes/addons/default-http-backend.yaml')  # noqa
-        kubectl_manifest('delete', '/etc/kubernetes/addons/ingress-replication-controller.yaml')  # noqa
+        kubectl_manifest('delete',
+                         '/etc/kubernetes/addons/default-http-backend.yaml')
+        kubectl_manifest('delete',
+                         '/etc/kubernetes/addons/ingress-replication-controller.yaml')  # noqa
         hookenv.close_port(80)
         hookenv.close_port(443)
 
