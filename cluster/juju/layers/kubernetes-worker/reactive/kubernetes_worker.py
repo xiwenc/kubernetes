@@ -1,9 +1,8 @@
 import os
 
 from shlex import split
-from subprocess import call
-from subprocess import check_call
-from subprocess import check_output
+from subprocess import call, check_call, check_output
+from subprocess import CalledProcessError
 from socket import gethostname
 
 from charms import layer
@@ -16,12 +15,12 @@ from charms.templating.jinja2 import render
 
 from charmhelpers.core import hookenv
 from charmhelpers.core.host import service_stop
-from charmhelpers.core.host import restart_on_change
 
 
 @hook('upgrade-charm')
 def remove_installed_state():
     remove_state('kubernetes-worker.components.installed')
+
 
 @hook('stop')
 def shutdown():
@@ -31,7 +30,7 @@ def shutdown():
         - stop the kube-proxy service
         - remove the 'kubernetes-worker.components.installed' state
     '''
-    kubectl(['delete', 'node', gethostname()])
+    kubectl('delete', 'node', gethostname())
     service_stop('kubelet')
     service_stop('kube-proxy')
     remove_state('kubernetes-worker.components.installed')
@@ -206,6 +205,16 @@ def render_and_launch_ingress(kube_dns):
         hookenv.close_port(443)
 
 
+@when('kubernetes-worker.ingress.available')
+def scale_ingress_controller():
+    ''' Scale the number of ingress controller replicas to match the number of
+    nodes. '''
+    output = kubectl('get', 'nodes', '-o', 'name')
+    count = len(output.splitlines())
+    if data_changed('ingress-controller-replicas', count):
+        kubectl('scale', '--replicas=%d' % count, 'rc/nginx-ingress-controller')
+
+
 def arch():
     '''Return the package architecture as a string. Raise an exception if the
     architecture is not supported by kubernetes.'''
@@ -343,15 +352,23 @@ def get_kube_api_servers(kube_api):
                                                   unit['port']))
     return hosts
 
-def kubectl(args, throw_on_error=True):
-    command = ['kubectl', '--kubeconfig=/srv/kubernetes/config'] + args
-    if throw_on_error:
-        hookenv.log('Executing {}'.format(command))
-        check_call(command)
-    else:
-        return_code = call(command)
-        hookenv.log('Executed {} got {}'.format(command, return_code))
-        return return_code
+
+def kubectl(*args):
+    ''' Run a kubectl cli command with a config file. Returns stdout and throws
+    an error if the command fails. '''
+    command = ['kubectl', '--kubeconfig=/srv/kubernetes/config'] + list(args)
+    hookenv.log('Executing {}'.format(command))
+    return check_output(command)
+
+
+def kubectl_success(*args):
+    ''' Runs kubectl with the given args. Returns True if succesful, False if
+    not. '''
+    try:
+        kubectl(*args)
+        return True
+    except CalledProcessError:
+        return False
 
 
 def kubectl_manifest(operation, manifest):
@@ -362,21 +379,18 @@ def kubectl_manifest(operation, manifest):
     # Deletions are a special case
     if operation == 'delete':
         # Ensure we immediately remove requested resources with --now
-        return_code = kubectl([operation, '-f', manifest, '--now'], throw_on_error=False)
-        return return_code == 0
+        return kubectl_success(operation, '-f', manifest, '--now')
     else:
         # Guard against an error re-creating the same manifest multiple times
         if operation == 'create':
-            found = kubectl(['get', '-f', manifest], throw_on_error=False)
             # If we already have the definition, its probably safe to assume
             # creation was true.
-            if found == 0:
+            if kubectl_success('get', '-f', manifest):
                 hookenv.log('Skipping definition for {}'.format(manifest))
                 return True
         # Execute the requested command that did not match any of the special
         # cases above
-        return_code = kubectl([operation, '-f', manifest], throw_on_error=False)
-        return return_code == 0
+        return kubectl_success(operation, '-f', manifest)
 
 
 def _systemctl_is_active(application):
