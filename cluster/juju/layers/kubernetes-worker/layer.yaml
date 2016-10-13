@@ -10,6 +10,7 @@ options:
   basic:
     packages:
       - 'nfs-common'
+      - 'ceph-common'
   tls-client:
     ca_certificate_path: '/srv/kubernetes/ca.crt'
     server_certificate_path: '/srv/kubernetes/server.crt'
