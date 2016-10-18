@@ -1,22 +1,24 @@
 restart-master:
   description: restart the apiserver, controller-manager, and scheduler
 create-rbd-pv:
-    description: Create persistant storage when related to ceph
-    options:
-      name:
-        type: string
-        default: ""
-        description: Name the persistent volume
-      size:
-        type: int
-        default: 0
-        description: Size in mb of the rbd volume
-      mode:
-        type: string
-        default: ReadWriteOnce
-        description: Access mode for the persistent volume.
-      filesystem:
-        type: string
-        default: xfs
-        description: FS type to format the volume
-
+  description: Create persistant storage when related to ceph
+  params:
+    name:
+      type: string
+      description: Name the persistent volume
+      minLength: 1
+    size:
+      type: integer
+      description: Size in mb of the rbd volume
+      minimum: 1
+    mode:
+      type: string
+      default: ReadWriteOnce
+      description: Access mode for the persistent volume.
+    filesystem:
+      type: string
+      default: xfs
+      description: FS type to format the volume
+  required:
+    - name
+    - size
