@@ -102,7 +102,7 @@ def create_rbd_volume(name, size, filesystem):
 
     # Lift the validation sequence to determine if we actually created the
     # rbd volume
-    if not validate_unique_volume_name(name):
+    if validate_unique_volume_name(name):
         # we failed to create the RBD volume. whoops
         action_fail('RBD Volume not listed after creation.')
         print('Ceph RBD volume {} not found in rbd list'.format(name))
@@ -173,7 +173,7 @@ def validate_unique_volume_name(name):
     volume_list = raw_out.decode('utf-8').splitlines()
 
     for volume in volume_list:
-        if volume.strip().decode('utf-8') == name:
+        if volume.strip() == name:
             return False
 
     return True
