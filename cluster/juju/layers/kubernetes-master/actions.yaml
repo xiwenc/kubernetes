@@ -9,16 +9,20 @@ create-rbd-pv:
       minLength: 1
     size:
       type: integer
-      description: Size in mb of the rbd volume
+      description: Size in mb of the RBD volume
       minimum: 1
     mode:
       type: string
       default: ReadWriteOnce
-      description: Access mode for the persistent volume.
+      description: Access mode for the persistent volume
     filesystem:
       type: string
       default: xfs
       description: FS type to format the volume
+    skip-size-check:
+      type: boolean
+      default: false
+      description: Allow creation of overprovisioned RBD
   required:
     - name
     - size

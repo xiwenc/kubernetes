@@ -38,6 +38,10 @@ def main():
     context['RBD_FS'] = action_get_or_default('filesystem').strip()
     context['PV_MODE'] = action_get_or_default('mode').strip()
 
+    # Ensure we're not exceeding available space in the pool
+    if not validate_space(context['RBD_SIZE']):
+        return
+
     # Ensure our paramters match
     param_validation = validate_parameters(context['RBD_NAME'],
                                            context['RBD_FS'],
@@ -80,6 +84,8 @@ def action_get_or_default(key):
         return 0
     elif key == 'mode':
         return "ReadWriteOnce"
+    elif key == 'skip-size-check':
+        return False
     else:
         return ''
 
@@ -153,6 +159,20 @@ def get_monitors():
     return found_hosts
 
 
+def get_available_space():
+    ''' Determine the space available in the RBD pool. Throw an exception if
+    the RBD pool ('rbd') isn't found. '''
+    command = ['ceph', 'df']
+    debug_command(command)
+    out = check_output(command)
+    for line in out.splitlines():
+        stripped = line.strip()
+        if stripped.startswith('rbd'):
+            M = stripped.split()[-2].replace('M', '')
+            return int(M)
+    raise UnknownAvailableSpaceException('Unable to determine available space.');
+
+
 def validate_unique_volume_name(name):
     ''' Poll the CEPH-MON services to determine if we have a unique rbd volume
     name to use. If there is naming collisions, block the request for volume
@@ -203,6 +223,17 @@ def validate_relation():
     return True
 
 
+def validate_space(size):
+    if action_get_or_default('skip-size-check'):
+        return True
+    available_space = get_available_space()
+    if available_space < size:
+        msg = 'Unable to allocate RBD of size {}MB, only {}MB are available.'
+        action_fail(msg.format(size, available_space))
+        return False
+    return True
+
+
 def validate_parameters(name, fs, mode):
     ''' Validate the user inputs to ensure they conform to what the
     action expects. This method will check the naming characters used
@@ -242,6 +273,10 @@ def validate_parameters(name, fs, mode):
 def debug_command(cmd):
     ''' Print a debug statement of the command invoked '''
     print("Invoking {}".format(cmd))
+
+
+class UnknownAvailableSpaceException(Exception):
+    pass
 
 
 if __name__ == '__main__':
