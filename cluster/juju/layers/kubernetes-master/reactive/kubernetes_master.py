@@ -544,9 +544,9 @@ def prepare_sdn_context(sdn_plugin=None):
     # SDN Providers pass data via the sdn-plugin interface
     # Ideally the DNS address should come from the sdn cidr, or subnet.
     plugin_data = sdn_plugin.get_sdn_config()
-    if plugin_data.get('subnet'):
+    if plugin_data.get('cidr'):
         # Generate the DNS ip address on the SDN cidr (this is desired).
-        pillar['dns_server'] = get_dns_ip(plugin_data['subnet'])
+        pillar['dns_server'] = get_dns_ip(plugin_data['cidr'])
     # The pillar['dns_server'] value is used the kubedns-svc.yaml file.
     pillar['dns_replicas'] = 1
     # The pillar['dns_domain'] value is used in the kubedns-rc.yaml
