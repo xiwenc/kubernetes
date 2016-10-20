@@ -157,8 +157,8 @@ def start_master(etcd, tls):
 @when('kube-dns.available', 'cluster-dns.connected', 'sdn-plugin.available')
 def send_cluster_dns_detail(cluster_dns, sdn_plugin):
     details = sdn_plugin.get_sdn_config()
-    sdn_ip = get_dns_ip(details['cidr'])
-    cluster_dns.set_dns_info(53, hookenv.config('dns_domain'), sdn_ip)
+    dns_ip = get_dns_ip(details['cidr'])
+    cluster_dns.set_dns_info(53, hookenv.config('dns_domain'), dns_ip)
 
 
 @when('kube-api-endpoint.available')
@@ -542,7 +542,7 @@ def prepare_sdn_context(sdn_plugin=None):
     # The dictionary named 'pillar' is a construct of the k8s template files.
     pillar = {}
     # SDN Providers pass data via the sdn-plugin interface
-    # Ideally the DNS address should come from the sdn cidr, or subnet.
+    # Ideally the DNS address should come from the sdn cidr.
     plugin_data = sdn_plugin.get_sdn_config()
     if plugin_data.get('cidr'):
         # Generate the DNS ip address on the SDN cidr (this is desired).
