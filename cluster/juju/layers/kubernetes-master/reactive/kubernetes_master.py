@@ -232,17 +232,18 @@ def launch_kubernetes_dashboard():
         hookenv.log('Launching kubernetes dashboard.')
         context = {}
         context['arch'] = arch()
-        render('kubernetes-dashboard.yaml', manifest, context)
-        cmd = ['kubectl', 'create', '-f', manifest]
-        call(cmd)
+        for template in os.listdir("templates/dashboard"):
+            target = '/etc/kubernetes/addons/' + template
+            render('dashboard/' + template, target, context)
+            cmd = ['kubectl', 'create', '-f', target]
+            call(cmd)
         set_state('kubernetes.dashboard.available')
     else:
         hookenv.log('Removing kubernetes dashboard.')
-        cmd = ['kubectl', 'delete', '-f', manifest]
-        try:
+        for template in os.listdir("templates/dashboard"):
+            target = '/etc/kubernetes/addons/' + template
+            cmd = ['kubectl', 'delete', '-f', target]
             call(cmd)
-        except CalledProcessError:
-            pass
 
 
 @when('kubernetes-master.components.installed', 'kube-sdn.configured',
