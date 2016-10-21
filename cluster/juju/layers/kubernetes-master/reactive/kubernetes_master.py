@@ -154,8 +154,11 @@ def start_master(etcd, tls):
     set_state('kubernetes-master.components.started')
 
 
-@when('kube-dns.available', 'cluster-dns.connected', 'sdn-plugin.available')
+@when('cluster-dns.connected', 'sdn-plugin.available')
 def send_cluster_dns_detail(cluster_dns, sdn_plugin):
+    ''' Send cluster DNS info '''
+    # Note that the DNS server doesn't necessarily exist at this point. We know
+    # where we're going to put it, though, so let's send the info anyway.
     details = sdn_plugin.get_sdn_config()
     dns_ip = get_dns_ip(details['cidr'])
     cluster_dns.set_dns_info(53, hookenv.config('dns_domain'), dns_ip)

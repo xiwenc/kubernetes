@@ -133,28 +133,14 @@ def update_kubelet_status():
 
 @when('kubernetes-worker.components.installed', 'kube-api-endpoint.available',
       'tls_client.ca.saved', 'tls_client.client.certificate.saved',
-      'tls_client.client.key.saved')
-@when_not('kube-dns.available')
-def start_worker(kube_api):
-    '''Need to start the worker services before the api-server can schedule
-    required addons like DNS inside the workers.'''
-    # Get the list of kubernetes api servers from the relationship object.
-    servers = get_kube_api_servers(kube_api)
-    if data_changed('kube-api-servers', servers):
-        create_config(servers[0])
-        render_init_scripts(servers)
-        restart_unit_services()
-        update_kubelet_status()
-
-
-@when('kubernetes-worker.components.installed', 'kube-api-endpoint.available',
-      'tls_client.ca.saved', 'tls_client.client.certificate.saved',
       'tls_client.client.key.saved', 'kube-dns.available')
-def render_dns_scripts(kube_api, kube_dns):
-    ''' The dns is now available, re-render init config with DNS data. '''
-    # GEt the list of kubernetes api servers from the relationship object.
+def start_worker(kube_api, kube_dns):
+    ''' Start kubelet using the provided API and DNS info.'''
     servers = get_kube_api_servers(kube_api)
-    # Fetch the DNS data on the relationship.
+    # Note that the DNS server doesn't necessarily exist at this point. We know
+    # what its IP will eventually be, though, so we can go ahead and configure
+    # kubelet with that info. This ensures that early pods are configured with
+    # the correct DNS even though the server isn't ready yet.
     dns = kube_dns.details()
     if (data_changed('kube-api-servers', servers) or
             data_changed('kube-dns', dns)):
