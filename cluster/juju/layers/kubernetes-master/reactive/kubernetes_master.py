@@ -230,7 +230,6 @@ def reset_states():
 @when_not('kubernetes.dashboard.available')
 def launch_kubernetes_dashboard():
     ''' Launch the Kubernetes dashboard. If not enabled, attempt deletion '''
-    manifest = '/etc/kubernetes/addons/dashboard.yaml'
     if hookenv.config('dashboard'):
         hookenv.log('Launching kubernetes dashboard.')
         context = {}
