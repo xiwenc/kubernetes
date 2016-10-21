@@ -161,7 +161,7 @@ def render_dns_scripts(kube_api, kube_dns):
         # Initialize a FlagManager object to add flags to unit data.
         opts = FlagManager('kubelet')
         # Append the DNS flags + data to the FlagManager object.
-        opts.add('--cluster-dns', '{0}:{1}'.format(dns['sdn-ip'], dns['port']))
+        opts.add('--cluster-dns', dns['sdn-ip'])
         opts.add('--cluster-domain', dns['domain'])
         create_config(servers[0])
         render_init_scripts(servers)
