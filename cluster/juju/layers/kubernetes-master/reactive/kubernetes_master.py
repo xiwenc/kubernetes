@@ -234,6 +234,8 @@ def launch_kubernetes_dashboard():
         hookenv.log('Launching kubernetes dashboard.')
         context = {}
         context['arch'] = arch()
+        # FIXME: use correct num_nodes here
+        context['pillar'] = {'num_nodes': 1}
         for template in os.listdir("templates/dashboard"):
             target = '/etc/kubernetes/addons/' + template
             render('dashboard/' + template, target, context)
