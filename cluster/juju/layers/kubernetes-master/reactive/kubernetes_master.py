@@ -230,24 +230,26 @@ def reset_states():
 @when_not('kubernetes.dashboard.available')
 def launch_kubernetes_dashboard():
     ''' Launch the Kubernetes dashboard. If not enabled, attempt deletion '''
+    templates = [
+        'kubernetes-dashboard.yaml',
+        'influxdb-grafana-controller.yaml',
+        'influxdb-service.yaml',
+        'grafana-service.yaml',
+        'heapster-controller.yaml',
+        'heapster-service.yaml'
+    ]
     if hookenv.config('dashboard'):
         hookenv.log('Launching kubernetes dashboard.')
         context = {}
         context['arch'] = arch()
-        # FIXME: use correct num_nodes here
-        context['pillar'] = {'num_nodes': 1}
-        for template in os.listdir("templates/dashboard"):
-            target = '/etc/kubernetes/addons/' + template
-            render('dashboard/' + template, target, context)
-            cmd = ['kubectl', 'create', '-f', target]
-            call(cmd)
+        context['pillar'] = {'num_nodes': get_node_count()}
+        for template in templates:
+            create_addon(template, context)
         set_state('kubernetes.dashboard.available')
     else:
         hookenv.log('Removing kubernetes dashboard.')
-        for template in os.listdir("templates/dashboard"):
-            target = '/etc/kubernetes/addons/' + template
-            cmd = ['kubectl', 'delete', '-f', target]
-            call(cmd)
+        for template in templates:
+            delete_addon(template)
 
 
 @when('kubernetes-master.components.installed', 'kube-sdn.configured',
@@ -388,6 +390,29 @@ def ceph_storage(ceph_admin):
     # have performed the necessary pre-req steps to interface with a ceph
     # deployment.
     set_state('ceph-storage.configured')
+
+
+def create_addon(template, context):
+    '''Create an addon from a template'''
+    target = '/etc/kubernetes/addons/' + template
+    render(template, target, context)
+    cmd = ['kubectl', 'create', '-f', target]
+    check_call(cmd)
+
+
+def delete_addon(template):
+    '''Delete an addon from a template'''
+    target = '/etc/kubernetes/addons/' + template
+    cmd = ['kubectl', 'delete', '-f', target]
+    call(cmd)
+
+
+def get_node_count():
+    '''Return the number of Kubernetes nodes in the cluster'''
+    cmd = ['kubectl', 'get', 'nodes', '-o', 'name']
+    output = check_output(cmd)
+    node_count = len(output.splitlines())
+    return node_count
 
 
 def launch_dns():
