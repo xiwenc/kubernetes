@@ -276,7 +276,6 @@ def start_kube_dns(sdn_plugin):
     hookenv.log(message)
     hookenv.status_set('maintenance', message)
 
-    create_kube_system_namespace()
     context = prepare_sdn_context(sdn_plugin)
     context['arch'] = arch()
     create_addon('kubedns-rc.yaml', context)
@@ -413,12 +412,6 @@ def get_node_count():
     output = check_output(cmd)
     node_count = len(output.splitlines())
     return node_count
-
-
-def create_kube_system_namespace():
-    '''Create the "kube-system" namespace'''
-    cmd = ['kubectl', 'create', 'namespace', 'kube-system']
-    call(cmd)
 
 
 def arch():
