@@ -272,15 +272,15 @@ def start_kube_dns(sdn_plugin):
         hookenv.log('kube-apiserver not ready, not requesting dns deployment')
         return
 
+    message = 'Rendering the Kubernetes DNS files.'
+    hookenv.log(message)
+    hookenv.status_set('maintenance', message)
+
+    create_kube_system_namespace()
     context = prepare_sdn_context(sdn_plugin)
     context['arch'] = arch()
-    render('kubedns-rc.yaml', '/etc/kubernetes/addons/kubedns-rc.yaml',
-           context)
-    render('kubedns-svc.yaml', '/etc/kubernetes/addons/kubedns-svc.yaml',
-           context)
-    # This should be auto-loaded by the addon manager, but it doesnt appear
-    # to do so.
-    launch_dns()
+    create_addon('kubedns-rc.yaml', context)
+    create_addon('kubedns-svc.yaml', context)
     set_state('kube-dns.available')
 
 
@@ -415,41 +415,10 @@ def get_node_count():
     return node_count
 
 
-def launch_dns():
-    '''Create the "kube-system" namespace, the kubedns resource controller, and
-    the kubedns service. '''
-    message = 'Rendering the Kubernetes DNS files.'
-    hookenv.log(message)
-    hookenv.status_set('maintenance', message)
-    # Render the DNS files with the cider information.
-    render_files()
-    # Run a command to check if the apiserver is responding.
-    return_code = call(split('kubectl cluster-info'))
-    if return_code != 0:
-        hookenv.log('kubectl command failed, waiting for apiserver to start.')
-        remove_state('kube-dns.available')
-        # Return without setting kube-dns.available so this method will retry.
-        return
-    # Check for the "kube-system" namespace.
-    return_code = call(split('kubectl get namespace kube-system'))
-    if return_code != 0:
-        # Create the kube-system namespace that is used by the kubedns files.
-        check_call(split('kubectl create namespace kube-system'))
-    addon_dir = '/etc/kubernetes/addons'
-    # Check for the kubedns replication controller.
-    get = 'kubectl get -f {0}/kubedns-rc.yaml'.format(addon_dir)
-    return_code = call(split(get))
-    if return_code != 0:
-        # Create the kubedns replication controller from the rendered file.
-        create = 'kubectl create -f {0}/kubedns-rc.yaml'.format(addon_dir)
-        check_call(split(create))
-    # Check for the kubedns service.
-    get = 'kubectl get -f {0}/kubedns-svc.yaml'.format(addon_dir)
-    return_code = call(split(get))
-    if return_code != 0:
-        # Create the kubedns service from the rendered file.
-        create = 'kubectl create -f {0}/kubedns-svc.yaml'.format(addon_dir)
-        check_call(split(create))
+def create_kube_system_namespace():
+    '''Create the "kube-system" namespace'''
+    cmd = ['kubectl', 'create', 'namespace', 'kube-system']
+    call(cmd)
 
 
 def arch():
