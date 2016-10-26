@@ -395,7 +395,7 @@ def create_addon(template, context):
     '''Create an addon from a template'''
     target = '/etc/kubernetes/addons/' + template
     render(template, target, context)
-    cmd = ['kubectl', 'create', '-f', target]
+    cmd = ['kubectl', 'apply', '-f', target]
     check_call(cmd)
 
 
