@@ -220,7 +220,8 @@ def gather_sdn_data(sdn_plugin):
     set_state('kube-sdn.configured')
 
 
-@when('config.changed.dashboard', 'kubernetes.dashboard.available')
+@when('config.changed.enable-dashboard-addons',
+      'kubernetes.dashboard.available')
 def reset_states():
     remove_state('kubernetes.dashboard.available')
     launch_kubernetes_dashboard()
@@ -238,7 +239,7 @@ def launch_kubernetes_dashboard():
         'heapster-controller.yaml',
         'heapster-service.yaml'
     ]
-    if hookenv.config('dashboard'):
+    if hookenv.config('enable-dashboard-addons'):
         hookenv.log('Launching kubernetes dashboard.')
         context = {}
         context['arch'] = arch()
