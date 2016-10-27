@@ -224,10 +224,9 @@ def gather_sdn_data(sdn_plugin):
       'kubernetes.dashboard.available')
 def reset_states():
     remove_state('kubernetes.dashboard.available')
-    launch_kubernetes_dashboard()
 
 
-@when('kube-dns.available')
+@when('kube-dns.available', 'kubernetes-master.components.started')
 @when_not('kubernetes.dashboard.available')
 def launch_kubernetes_dashboard():
     ''' Launch the Kubernetes dashboard. If not enabled, attempt deletion '''
