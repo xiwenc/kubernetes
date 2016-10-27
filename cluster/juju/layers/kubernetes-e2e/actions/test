@@ -1,0 +1,22 @@
+#!/bin/bash
+
+set -ex
+
+# Grab the action parameter values
+FOCUS=$(action-get focus)
+SKIP=$(action-get skip)
+
+if [ ! -f /home/ubuntu/.kube/config ]
+then
+  action-fail "Missing Kubernetes configuration."
+  action-set suggestion="Relate to the certificate authority, and kubernetes-master"
+  exit 0
+fi
+
+# get the host from the config file
+SERVER=$(cat /home/ubuntu/.kube/config | grep server | sed 's/    server://')
+
+# Execute the E2E test
+e2e.test -kubeconfig /home/ubuntu/.kube/config -host $SERVER -ginkgo.focus $FOCUS -ginkgo.skip $SKIP 2>&1 | tee /home/ubuntu/${JUJU_ACTION_UUID}.log
+
+action-set result.output=$(cat /home/ubuntu/${JUJU_ACTION_UUID}.log)
