@@ -154,8 +154,11 @@ def start_master(etcd, tls):
     set_state('kubernetes-master.components.started')
 
 
-@when('kube-dns.available', 'cluster-dns.connected', 'sdn-plugin.available')
+@when('cluster-dns.connected', 'sdn-plugin.available')
 def send_cluster_dns_detail(cluster_dns, sdn_plugin):
+    ''' Send cluster DNS info '''
+    # Note that the DNS server doesn't necessarily exist at this point. We know
+    # where we're going to put it, though, so let's send the info anyway.
     details = sdn_plugin.get_sdn_config()
     dns_ip = get_dns_ip(details['cidr'])
     cluster_dns.set_dns_info(53, hookenv.config('dns_domain'), dns_ip)
@@ -217,7 +220,8 @@ def gather_sdn_data(sdn_plugin):
     set_state('kube-sdn.configured')
 
 
-@when('config.changed.dashboard', 'kubernetes.dashboard.available')
+@when('config.changed.enable-dashboard-addons',
+      'kubernetes.dashboard.available')
 def reset_states():
     remove_state('kubernetes.dashboard.available')
     launch_kubernetes_dashboard()
@@ -227,22 +231,26 @@ def reset_states():
 @when_not('kubernetes.dashboard.available')
 def launch_kubernetes_dashboard():
     ''' Launch the Kubernetes dashboard. If not enabled, attempt deletion '''
-    manifest = '/etc/kubernetes/addons/dashboard.yaml'
-    if hookenv.config('dashboard'):
+    templates = [
+        'kubernetes-dashboard.yaml',
+        'influxdb-grafana-controller.yaml',
+        'influxdb-service.yaml',
+        'grafana-service.yaml',
+        'heapster-controller.yaml',
+        'heapster-service.yaml'
+    ]
+    if hookenv.config('enable-dashboard-addons'):
         hookenv.log('Launching kubernetes dashboard.')
         context = {}
         context['arch'] = arch()
-        render('kubernetes-dashboard.yaml', manifest, context)
-        cmd = ['kubectl', 'create', '-f', manifest]
-        call(cmd)
+        context['pillar'] = {'num_nodes': get_node_count()}
+        for template in templates:
+            create_addon(template, context)
         set_state('kubernetes.dashboard.available')
     else:
         hookenv.log('Removing kubernetes dashboard.')
-        cmd = ['kubectl', 'delete', '-f', manifest]
-        try:
-            call(cmd)
-        except CalledProcessError:
-            pass
+        for template in templates:
+            delete_addon(template)
 
 
 @when('kubernetes-master.components.installed', 'kube-sdn.configured',
@@ -265,15 +273,14 @@ def start_kube_dns(sdn_plugin):
         hookenv.log('kube-apiserver not ready, not requesting dns deployment')
         return
 
+    message = 'Rendering the Kubernetes DNS files.'
+    hookenv.log(message)
+    hookenv.status_set('maintenance', message)
+
     context = prepare_sdn_context(sdn_plugin)
     context['arch'] = arch()
-    render('kubedns-rc.yaml', '/etc/kubernetes/addons/kubedns-rc.yaml',
-           context)
-    render('kubedns-svc.yaml', '/etc/kubernetes/addons/kubedns-svc.yaml',
-           context)
-    # This should be auto-loaded by the addon manager, but it doesnt appear
-    # to do so.
-    launch_dns()
+    create_addon('kubedns-rc.yaml', context)
+    create_addon('kubedns-svc.yaml', context)
     set_state('kube-dns.available')
 
 
@@ -385,41 +392,27 @@ def ceph_storage(ceph_admin):
     set_state('ceph-storage.configured')
 
 
-def launch_dns():
-    '''Create the "kube-system" namespace, the kubedns resource controller, and
-    the kubedns service. '''
-    message = 'Rendering the Kubernetes DNS files.'
-    hookenv.log(message)
-    hookenv.status_set('maintenance', message)
-    # Render the DNS files with the cider information.
-    render_files()
-    # Run a command to check if the apiserver is responding.
-    return_code = call(split('kubectl cluster-info'))
-    if return_code != 0:
-        hookenv.log('kubectl command failed, waiting for apiserver to start.')
-        remove_state('kube-dns.available')
-        # Return without setting kube-dns.available so this method will retry.
-        return
-    # Check for the "kube-system" namespace.
-    return_code = call(split('kubectl get namespace kube-system'))
-    if return_code != 0:
-        # Create the kube-system namespace that is used by the kubedns files.
-        check_call(split('kubectl create namespace kube-system'))
-    addon_dir = '/etc/kubernetes/addons'
-    # Check for the kubedns replication controller.
-    get = 'kubectl get -f {0}/kubedns-rc.yaml'.format(addon_dir)
-    return_code = call(split(get))
-    if return_code != 0:
-        # Create the kubedns replication controller from the rendered file.
-        create = 'kubectl create -f {0}/kubedns-rc.yaml'.format(addon_dir)
-        check_call(split(create))
-    # Check for the kubedns service.
-    get = 'kubectl get -f {0}/kubedns-svc.yaml'.format(addon_dir)
-    return_code = call(split(get))
-    if return_code != 0:
-        # Create the kubedns service from the rendered file.
-        create = 'kubectl create -f {0}/kubedns-svc.yaml'.format(addon_dir)
-        check_call(split(create))
+def create_addon(template, context):
+    '''Create an addon from a template'''
+    target = '/etc/kubernetes/addons/' + template
+    render(template, target, context)
+    cmd = ['kubectl', 'apply', '-f', target]
+    check_call(cmd)
+
+
+def delete_addon(template):
+    '''Delete an addon from a template'''
+    target = '/etc/kubernetes/addons/' + template
+    cmd = ['kubectl', 'delete', '-f', target]
+    call(cmd)
+
+
+def get_node_count():
+    '''Return the number of Kubernetes nodes in the cluster'''
+    cmd = ['kubectl', 'get', 'nodes', '-o', 'name']
+    output = check_output(cmd)
+    node_count = len(output.splitlines())
+    return node_count
 
 
 def arch():

@@ -34,21 +34,14 @@ juju add-relation kubernetes-node etcd
 For your convenience this charm supports some configuration options to set up
 a Kubernetes cluster that works in your environment:  
 
-#### version 
-
-Set the version of the Kubernetes containers to deploy. The version string must
-be in the following format "v#.#.#" where the numbers match with the
-[kubernetes release labels](https://github.com/kubernetes/kubernetes/releases)
-of the [kubernetes github project](https://github.com/kubernetes/kubernetes).
-Changing the version causes the all the Kubernetes containers to be restarted.
-
-#### cidr
-
-Set the IP range for the Kubernetes cluster. eg: 10.1.0.0/16
-
 #### dns_domain
 
 The domain name to use for the Kubernetes cluster by the skydns service.
+
+#### enable-dashboard-addons
+
+Enables the installation of Kubernetes dashboard, Heapster, Grafana, and
+InfluxDB.
 
 # Additional Information
 

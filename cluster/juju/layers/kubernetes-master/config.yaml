@@ -1,8 +1,8 @@
 options:
-  dashboard:
+  enable-dashboard-addons:
     type: boolean
     default: True
-    description: Deploy the Kubernetes Dashboard
+    description: Deploy the Kubernetes Dashboard and Heapster addons
   dns_domain:
     type: string
     default: cluster.local
