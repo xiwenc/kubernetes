@@ -1,0 +1,14 @@
+test:
+  params:
+    focus:
+      default: "\\[Conformance\\]"
+      description: "Regex focus for executing the test"
+      type: string
+    skip:
+      default: "\\[Flaky\\]"
+      description: "Regex of tests to skip"
+      type: string
+    timeout:
+      default: 30000
+      description: Timeout in nanoseconds
+      type: integer
