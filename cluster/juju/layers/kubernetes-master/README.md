@@ -1,4 +1,4 @@
-# kubernetes-master
+# Kubernetes-master
 
 [Kubernetes](http://kubernetes.io/) is an open source system for managing 
 application containers across a cluster of hosts. The Kubernetes project was
@@ -16,18 +16,14 @@ This charm was built from other charm layers using the Juju reactive framework.
 The other layers focus on specific subset of operations making this layer 
 specific to operations of Kubernetes master processes.
 
-This charm is one part of what is needed to model a Kubernetes cluster. If you
-wish to deploy a complete cluster please look at the collection of charms that
-model a [Kubernetes core](https://jujucharms.com/kubernetes-core/) cluster.
-
 # Deployment
 
-This charm is not self contained, other charms are needed to model a complete 
-Kubernetes cluster. The cluster requires a distributed key value store such as 
-[Etcd](https://coreos.com/etcd/) and the kubernetes-worker charm which delivers
-the Kubernetes node services. A cluster requires a Software Defined Network 
-(SDN) and Transport Layer Security (TLS) so the components in a cluster 
-communicate securely. 
+This charm is not fully function when deployed by itself. It requires other
+charms to model a complete Kubernetes cluster. A Kubernetes cluster needs a
+distributed key value store such as [Etcd](https://coreos.com/etcd/) and the
+kubernetes-worker charm which delivers the Kubernetes node services. A cluster
+requires a Software Defined Network (SDN) and Transport Layer Security (TLS) so
+the components in a cluster communicate securely. 
 
 Please take a look at the [Canonical Distribution of Kubernetes](https://jujucharms.com/canonical-kubernetes/) 
 or the [Kubernetes core](https://jujucharms.com/kubernetes-core/) bundles for 
@@ -36,21 +32,13 @@ examples of complete models of Kubernetes clusters.
 # Resources
 
 The kubernetes-master charm takes advantage of the [Juju Resources](https://jujucharms.com/docs/2.0/developer-resources) 
-feature.
+feature to deliver the Kubernetes software.
 
-The resources are already attached to the Juju Charm Store, but in cases where
-the charm can not contact the Charm Store or if you want to use a different 
-version of Kubernetes you can attach a different resource to this charm.
-
-Using Juju resources allows you to deploy or upgrade a kubernetes-master charm
-in an environment with network restrictions and strict firewall rules. 
-
-To attach a different resource to a deployed kubernetes-master charm, run the
-following command:
-
-```
-juju attach kubernetes-master kubernetes=/path/to/kubernetes-master.tar.gz
-```
+In deployments on public clouds the Charm Store provides the resource to the
+charm automatically with no user intervention. Some environments with strict
+firewall rules may not be able to contact the Charm Store. In these network
+restricted  environments the resource can be uploaded to the model by the Juju
+operator.
 
 # Configuration
 
@@ -59,7 +47,7 @@ that works in your environment:
 
 #### dns_domain
 
-The domain name to use for the Kubernetes cluster for kube-dns.
+The domain name to use for the Kubernetes cluster for DNS.
 
 #### enable-dashboard-addons
 
@@ -74,16 +62,22 @@ forward lookups (A records), service lookups (SRV records) and reverse IP
 address lookups (PTR records). More information about the DNS can be obtained
 from the [Kubernetes DNS admin guide](http://kubernetes.io/docs/admin/dns/).
 
-# Adding optional storage
+# Actions
 
-The kubernetes-master charm handles different persistent storage devices that
-the cloud environments provide. See the 
-[Juju storage](https://jujucharms.com/docs/stable/charms-storage) documentation
-for more details about the supported clouds and storage pool types that are 
-available.
+The kubernetes-master charm models a few one time operations called 
+[Juju actions](https://jujucharms.com/docs/stable/actions) that can be run by
+Juju users.
 
-Refer to the [Canonical Distribution of Kubernetes](https://jujucharms.com/canonical-kubernetes/) for more information
-about how add the Ceph charms that handle storage.
+#### create-rbd-pv
+
+This action creates RADOS Block Device (RBD) in Ceph and defines a Persistent
+Volume in Kubernetes so the containers can use durable storage. This action
+requires a relation to the ceph-mon charm before it can create the volume.
+
+#### restart
+
+This action restarts the Kubernetes master processes kube-apiserver, 
+kube-controller-manager, and kube-scheduler when the user needs a restart.
 
 # Additional Kubernetes information
 
@@ -97,6 +91,6 @@ about how add the Ceph charms that handle storage.
 The kubernetes-master charm is free and open source operations software created
 by the containers team at Canonical. 
 
-Canonical also offers enterprise support and customisation services. Please
+Canonical also offers enterprise support and customization services. Please
 refer to the [Kubernetes product page](https://www.ubuntu.com/cloud/kubernetes)
 for more details.
