@@ -3,11 +3,11 @@ test:
   params:
     focus:
       default: "\\[Conformance\\]"
-      description: "Regex focus for executing the test."
+      description: Run tests matching the focus regex pattern.
       type: string
     skip:
       default: "\\[Flaky\\]"
-      description: "Regex of tests to skip."
+      description: Skip tests matching the skip regex pattern.
       type: string
     timeout:
       default: 30000

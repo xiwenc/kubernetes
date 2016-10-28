@@ -1,4 +1,4 @@
-# Kubernetes End to end
+# Kubernetes end to end
 
 End-to-end (e2e) tests for Kubernetes provide a mechanism to test end-to-end
 behavior of the system, and is the last signal to ensure end user operations
@@ -14,7 +14,7 @@ users do, when unit and integration tests are insufficient.
 
 ## Usage
 
-To deploy the e e2e suite, its best to deploy the
+To deploy the end-to-end test suite, it is best to deploy the
 [kubernetes-core bundle](https://github.com/juju-solutions/bundle-kubernetes-core)
 and then relate the `kubernetes-e2e` charm.
 
@@ -27,7 +27,7 @@ juju add-relation kubernetes-e2e easyrsa
 
 
 Once the relations have settled, and the `kubernetes-e2e` charm reports
-`Ready to test.` - you may kick off an end to end validation test.
+ `Ready to test.` - you may kick off an end to end validation test.
 
 ### Running the e2e test
 
@@ -40,11 +40,11 @@ juju run-action kubernetes-e2e/0 test
 
 ### Tuning the e2e test
 
-The e2e test is configurable. By default it will seek to run the gambit of the
-conformance tests in a cloud agnostic way. These behaviors can be overidden to
-test only a subset of those conformance tests, or to test additional behaviors
-not enabled by default. You can see all tunable options on the charm by
-inspecting the schema output of the actions:
+The e2e test is configurable. By default it will focus on or skip the declared
+conformance tests in a cloud agnostic way. Default behaviors are configurable.
+This allows the operator to test only a subset of the conformance tests, or to
+test more behaviors not enabled by default. You can see all tunable options on
+the charm by inspecting the schema output of the actions:
 
 ```shell
 $ juju actions kubernetes-e2e --format=yaml --schema
@@ -67,19 +67,39 @@ test:
   type: object
 ```
 
+
 As an example, you can run a more limited set of tests for rapid validation of
-a deployed cluster:
+a deployed cluster. The following example will skip the `Flaky`, `Slow`, and
+`Feature` labeled tests:
 
 ```shell
-# CODE GOES HERE
+juju run-action kubernetes-e2e/0 skip='\[(Flaky|Slow|Feature:.*)\]'
 ```
+
+> Note: the escaping of the regex due to how bash handles brackets.
+
+To see the different types of tests the Kubernetes end-to-end charm has access
+to, we encourage you to see the upstream documentation on the different types
+of tests, and to strongly understand what subsets of the tests you are running.
+
+[Kinds of tests](https://github.com/kubernetes/kubernetes/blob/master/docs/devel/e2e-tests.md#kinds-of-tests)
+
+### More information on end-to-end testing
+
+Along with the above descriptions, end-to-end testing is a much larger subject
+than this readme can encapsulate. There is far more information in the
+[end-to-end testing guide](https://github.com/kubernetes/kubernetes/blob/master/docs/devel/e2e-tests.md).
 
 ### Evaluating end-to-end results
 
-Its not enough to just simply run the test. Result output is stored in two
-places. The raw output of the e2e run is available in `juju show-action-output`
+It is not enough to just simply run the test. Result output is stored in two
+places. The raw output of the e2e run is available in the `juju show-action-output`
 command, as well as a flat file on disk on the `kubernetes-e2e` unit that
 executed the test.
+
+> Note: The results will only be available once the action has
+completed the test run. End-to-end testing can be quite time intensive. Often
+times taking **greater than 1 hour**, depending on configuration.
 
 ##### Flat file
 
@@ -101,9 +121,11 @@ $ juju show-action-output 4ceed33a-d96d-465a-8f31-20d63442e51b
 
 ## Known issues
 
-The e2e test suite assumes egress network access, as it will pull container
+The e2e test suite assumes egress network access. It will pull container
 images from `gcr.io`. You will need to have this registry unblocked in your
-firewall in order to successfully run e2e test results.
+firewall to successfully run e2e test results. Or you may use the exposed
+proxy settings [properly configured](https://github.com/juju-solutions/bundle-canonical-kubernetes#proxy-configuration)
+on the kubernetes-worker units.
 
 ## Contact information
 
@@ -112,7 +134,7 @@ Primary Authors: The ~containers team at Canonical
 - [Matt Bruzek &lt;matthew.bruzek@canonical.com&gt;](mailto:matthew.bruzek@canonical.com)
 - [Charles Butler &lt;charles.butler@canonical.com&gt;](mailto:charles.butler@canonical.com)
 
-Additional resources for help:
+More resources for help:
 
 - [Bug Tracker](https://github.com/juju-solutions/bundle-canonical-kubernetes/issues)
 - [Github Repository](https://github.com/kubernetes/kubernetes/)
