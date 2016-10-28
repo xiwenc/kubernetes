@@ -1,118 +1,102 @@
-# kubernetes
+# kubernetes-master
 
-[Kubernetes](https://github.com/kubernetes/kubernetes) is an open
-source system for managing application containers across multiple hosts.
-This version of Kubernetes uses [Docker](http://www.docker.io/) to package,
-instantiate and run containerized applications.
+[Kubernetes](http://kubernetes.io/) is an open source system for managing 
+application containers across a cluster of hosts. The Kubernetes project was
+started by Google in 2014, combining the experience of running production 
+workloads combined with best practices from the community.
 
-This charm is an encapsulation of the
-[Running Kubernetes locally via
-Docker](http://kubernetes.io/docs/getting-started-guides/docker)
-document. The released hyperkube image (`gcr.io/google_containers/hyperkube`)
-is currently pulled from a [Google owned container repository
-repository](https://cloud.google.com/container-registry/).  For this charm to
-work it will need access to the repository to `docker pull` the images.
+The Kubernetes project defines some new terms that may be unfamiliar to users
+or operators. For more information please refer to the concept guide in the 
+[getting started guide](http://kubernetes.io/docs/user-guide/#concept-guide).
 
-This charm was built from other charm layers using the reactive framework. The
-`layer:docker` is the base layer. For more information please read [Getting
-Started Developing charms](https://jujucharms.com/docs/devel/developer-getting-started)
+This charm is an encapsulation of the Kubernetes master processes and the 
+operations to run on any cloud for the entire lifecycle of the cluster.
+
+This charm was built from other charm layers using the Juju reactive framework.
+The other layers focus on specific subset of operations making this layer 
+specific to operations of Kubernetes master processes.
+
+This charm is one part of what is needed to model a Kubernetes cluster. If you
+wish to deploy a complete cluster please look at the collection of charms that
+model a [Kubernetes core](https://jujucharms.com/kubernetes-core/) cluster.
 
 # Deployment
-The kubernetes charms require a relation to a distributed key value store
-(ETCD) which Kubernetes uses for persistent storage of all of its REST API
-objects.
+
+This charm is not self contained, other charms are needed to model a complete 
+Kubernetes cluster. The cluster requires a distributed key value store such as 
+[Etcd](https://coreos.com/etcd/) and the kubernetes-worker charm which delivers
+the Kubernetes node services. A cluster requires a Software Defined Network 
+(SDN) and Transport Layer Security (TLS) so the components in a cluster 
+communicate securely. 
+
+Please take a look at the [Canonical Distribution of Kubernetes](https://jujucharms.com/canonical-kubernetes/) 
+or the [Kubernetes core](https://jujucharms.com/kubernetes-core/) bundles for 
+examples of complete models of Kubernetes clusters.
+
+# Resources
+
+The kubernetes-master charm takes advantage of the [Juju Resources](https://jujucharms.com/docs/2.0/developer-resources) 
+feature.
+
+The resources are already attached to the Juju Charm Store, but in cases where
+the charm can not contact the Charm Store or if you want to use a different 
+version of Kubernetes you can attach a different resource to this charm.
+
+Using Juju resources allows you to deploy or upgrade a kubernetes-master charm
+in an environment with network restrictions and strict firewall rules. 
+
+To attach a different resource to a deployed kubernetes-master charm, run the
+following command:
 
 ```
-juju deploy trusty/etcd
-juju deploy kubernetes-master
-juju deploy kubernetes-node
-juju add-relation kubernetes-master etcd
-juju add-relation kubernetes-node etcd
+juju attach kubernetes-master kubernetes=/path/to/kubernetes-master.tar.gz
 ```
 
 # Configuration
-For your convenience this charm supports some configuration options to set up
-a Kubernetes cluster that works in your environment:  
+
+This charm supports some configuration options to set up a Kubernetes cluster 
+that works in your environment:  
 
 #### dns_domain
 
-The domain name to use for the Kubernetes cluster by the skydns service.
+The domain name to use for the Kubernetes cluster for kube-dns.
 
 #### enable-dashboard-addons
 
 Enables the installation of Kubernetes dashboard, Heapster, Grafana, and
 InfluxDB.
 
-# Additional Information
+# DNS for the cluster
 
-## Kubedns
+The DNS add-on allows the pods to have a DNS names in addition to IP addresses.
+The Kubernetes cluster DNS server (based off the SkyDNS library) supports 
+forward lookups (A records), service lookups (SRV records) and reverse IP 
+address lookups (PTR records). More information about the DNS can be obtained
+from the [Kubernetes DNS admin guide](http://kubernetes.io/docs/admin/dns/).
 
-Kubernetes DNS is handled via the kubedns addon. More information about
-this service can be obtained in the
-[Kubernetes DNS admin guide](http://kubernetes.io/docs/admin/dns/ )
+# Adding optional storage
 
+The kubernetes-master charm handles different persistent storage devices that
+the cloud environments provide. See the 
+[Juju storage](https://jujucharms.com/docs/stable/charms-storage) documentation
+for more details about the supported clouds and storage pool types that are 
+available.
 
-# Storage
-The kubernetes charm is built to handle multiple storage devices if the cloud
-provider works with
-[Juju storage](https://jujucharms.com/docs/devel/charms-storage).
+Refer to the [Canonical Distribution of Kubernetes](https://jujucharms.com/canonical-kubernetes/) for more information
+about how add the Ceph charms that handle storage.
 
-The 16.04 (xenial) release introduced [ZFS](https://en.wikipedia.org/wiki/ZFS)
-to Ubuntu. The xenial charm can use ZFS witha raidz pool. A raidz pool
-distributes parity along with the data (similar to a raid5 pool) and can suffer
-the loss of one drive while still retaining data. The raidz pool requires a
-minimum of 3 disks, but will accept more if they are provided.
-
-You can add storage to the kubernetes charm in increments of 3 or greater:
-
-```
-juju add-storage kubernetes/0 disk-pool=ebs,3,1G
-```
-
-**Note**: Due to a limitation of raidz you can not add individual disks to an
-existing pool. Should you need to expand the storage of the raidz pool, the
-additional add-storage commands must be the same number of disks as the original
-command. At this point the charm will have two raidz pools added together, both
-of which could handle the  loss of one disk each.
-
-The storage code handles the addition of devices to the charm and when it
-recieves three disks creates a raidz pool that is mounted at the /srv/kubernetes
-directory by default. If you need the storage in another location you must
-change the `mount-point` value in layer.yaml before the charms is deployed.
-
-To avoid data loss you must attach the storage before making the connection to
-the etcd cluster.
-
-## State Events
-While this charm is meant to be a top layer, it can be used to build other
-solutions.  This charm sets or removes states from the reactive framework that
-other layers could react appropriately. The states that other layers would be
-interested in are as follows:
-
-**kubelet.available** - The hyperkube container has been run with the kubelet
-service and configuration that started the apiserver, controller-manager and
-scheduler containers.
-
-**proxy.available** - The hyperkube container has been run with the proxy
-service and configuration that handles Kubernetes networking.
-
-**kubectl.package.created** - Indicates the availability of the `kubectl`
-application along with the configuration needed to contact the cluster
-securely. You will need to download the `/home/ubuntu/kubectl_package.tar.gz`
-from the kubernetes leader unit to your machine so you can control the cluster.
-
-**skydns.available** - Indicates when the Domain Name System (DNS) for the
-cluster is operational.
-
-
-# Kubernetes information
+# Additional Kubernetes information
 
  - [Kubernetes github project](https://github.com/kubernetes/kubernetes)
  - [Kubernetes issue tracker](https://github.com/kubernetes/kubernetes/issues)
- - [Kubernetes Documenation](http://kubernetes.io/docs/)
+ - [Kubernetes documentation](http://kubernetes.io/docs/)
  - [Kubernetes releases](https://github.com/kubernetes/kubernetes/releases)
 
 # Contact
 
- * Charm Author: Matthew Bruzek &lt;Matthew.Bruzek@canonical.com&gt;
- * Charm Contributor: Charles Butler &lt;Charles.Butler@canonical.com&gt;
+The kubernetes-master charm is free and open source operations software created
+by the containers team at Canonical. 
+
+Canonical also offers enterprise support and customisation services. Please
+refer to the [Kubernetes product page](https://www.ubuntu.com/cloud/kubernetes)
+for more details.
