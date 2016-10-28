@@ -26,6 +26,16 @@ from charmhelpers.core.templating import render
 from charmhelpers.fetch import apt_install
 
 
+dashboard_templates = [
+    'kubernetes-dashboard.yaml',
+    'influxdb-grafana-controller.yaml',
+    'influxdb-service.yaml',
+    'grafana-service.yaml',
+    'heapster-controller.yaml',
+    'heapster-service.yaml'
+]
+
+
 @hook('upgrade-charm')
 def reset_states_for_delivery():
     '''An upgrade charm event was triggered by Juju, react to that here.'''
@@ -220,36 +230,28 @@ def gather_sdn_data(sdn_plugin):
     set_state('kube-sdn.configured')
 
 
-@when('config.changed.enable-dashboard-addons',
-      'kubernetes.dashboard.available')
-def reset_states():
-    remove_state('kubernetes.dashboard.available')
-
-
-@when('kube-dns.available', 'kubernetes-master.components.started')
+@when('kubernetes-master.components.started', 'kube-dns.available')
 @when_not('kubernetes.dashboard.available')
-def launch_kubernetes_dashboard():
-    ''' Launch the Kubernetes dashboard. If not enabled, attempt deletion '''
-    templates = [
-        'kubernetes-dashboard.yaml',
-        'influxdb-grafana-controller.yaml',
-        'influxdb-service.yaml',
-        'grafana-service.yaml',
-        'heapster-controller.yaml',
-        'heapster-service.yaml'
-    ]
+def install_dashboard_addons():
+    ''' Launch dashboard addons if they are enabled in config '''
     if hookenv.config('enable-dashboard-addons'):
         hookenv.log('Launching kubernetes dashboard.')
         context = {}
         context['arch'] = arch()
         context['pillar'] = {'num_nodes': get_node_count()}
-        for template in templates:
+        for template in dashboard_templates:
             create_addon(template, context)
         set_state('kubernetes.dashboard.available')
-    else:
+
+
+@when('kubernetes-master.components.started', 'kubernetes.dashboard.available')
+def remove_dashboard_addons():
+    ''' Removes dashboard addons if they are disabled in config '''
+    if not hookenv.config('enable-dashboard-addons'):
         hookenv.log('Removing kubernetes dashboard.')
-        for template in templates:
+        for template in dashboard_templates:
             delete_addon(template)
+        remove_state('kubernetes.dashboard.available')
 
 
 @when('kubernetes-master.components.installed', 'kube-sdn.configured',
