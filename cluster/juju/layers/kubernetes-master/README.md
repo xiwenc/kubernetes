@@ -12,13 +12,13 @@ or operators. For more information please refer to the concept guide in the
 This charm is an encapsulation of the Kubernetes master processes and the 
 operations to run on any cloud for the entire lifecycle of the cluster.
 
-This charm was built from other charm layers using the Juju reactive framework.
+This charm is built from other charm layers using the Juju reactive framework.
 The other layers focus on specific subset of operations making this layer 
 specific to operations of Kubernetes master processes.
 
 # Deployment
 
-This charm is not fully function when deployed by itself. It requires other
+This charm is not fully functional when deployed by itself. It requires other
 charms to model a complete Kubernetes cluster. A Kubernetes cluster needs a
 distributed key value store such as [Etcd](https://coreos.com/etcd/) and the
 kubernetes-worker charm which delivers the Kubernetes node services. A cluster
@@ -76,10 +76,10 @@ requires a relation to the ceph-mon charm before it can create the volume.
 
 #### restart
 
-This action restarts the Kubernetes master processes kube-apiserver, 
-kube-controller-manager, and kube-scheduler when the user needs a restart.
+This action restarts the master processes `kube-apiserver`, 
+`kube-controller-manager`, and `kube-scheduler` when the user needs a restart.
 
-# Additional Kubernetes information
+# More information
 
  - [Kubernetes github project](https://github.com/kubernetes/kubernetes)
  - [Kubernetes issue tracker](https://github.com/kubernetes/kubernetes/issues)
@@ -88,7 +88,7 @@ kube-controller-manager, and kube-scheduler when the user needs a restart.
 
 # Contact
 
-The kubernetes-master charm is free and open source operations software created
+The kubernetes-master charm is free and open source operations created
 by the containers team at Canonical. 
 
 Canonical also offers enterprise support and customization services. Please
