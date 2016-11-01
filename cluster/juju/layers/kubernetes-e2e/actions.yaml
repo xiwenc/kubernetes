@@ -5,6 +5,10 @@ test:
       default: "\\[Conformance\\]"
       description: Run tests matching the focus regex pattern.
       type: string
+    parallelism:
+      default: 25
+      description: The number of test nodes to run in parallel.
+      type: integer
     skip:
       default: "\\[Flaky\\]"
       description: Skip tests matching the skip regex pattern.

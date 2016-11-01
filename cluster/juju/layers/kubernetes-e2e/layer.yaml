@@ -4,6 +4,9 @@ includes:
   - layer:tls-client
   - interface:http
 options:
+  basic:
+    packages:
+      - golang-ginkgo-dev
   tls-client:
     ca_certificate_path: '/srv/kubernetes/ca.crt'
     client_certificate_path: '/srv/kubernetes/client.crt'
