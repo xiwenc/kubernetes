@@ -2,7 +2,7 @@ test:
   description: "Execute an end to end test."
   params:
     focus:
-      default: "\\[Conformance\\]"
+      default: "\\[Conformance\\]|\\[Serial\\]"
       description: Run tests matching the focus regex pattern.
       type: string
     parallelism:
