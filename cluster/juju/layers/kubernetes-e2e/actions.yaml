@@ -2,7 +2,7 @@ test:
   description: "Execute an end to end test."
   params:
     focus:
-      default: "\\[Conformance\\]|\\[Serial\\]"
+      default: "\\[Conformance\\]"
       description: Run tests matching the focus regex pattern.
       type: string
     parallelism:
@@ -10,7 +10,7 @@ test:
       description: The number of test nodes to run in parallel.
       type: integer
     skip:
-      default: "\\[Flaky\\]"
+      default: "\\[Flaky\\]|\\[Serial\\]"
       description: Skip tests matching the skip regex pattern.
       type: string
     timeout:
