@@ -3,7 +3,9 @@ import platform
 
 from charms import layer
 
+from charms.reactive import hook
 from charms.reactive import is_state
+from charms.reactive import remove_state
 from charms.reactive import set_state
 from charms.reactive import when
 from charms.reactive import when_not
@@ -15,6 +17,12 @@ from shlex import split
 from subprocess import call
 from subprocess import check_call
 from subprocess import check_output
+
+
+@hook('upgrade-charm')
+def reset_delivery_states():
+    ''' Remove the state set when resources are unpacked. '''
+    remove_state('kubernetes-e2e.installed')
 
 
 @when('kubernetes-e2e.installed')
