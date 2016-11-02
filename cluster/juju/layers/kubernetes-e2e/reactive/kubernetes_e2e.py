@@ -21,7 +21,7 @@ from subprocess import check_output
 
 @hook('upgrade-charm')
 def reset_delivery_states():
-    ''' this removes a state. Guess which one '''
+    ''' Remove the state set when resources are unpacked. '''
     remove_state('kubernetes-e2e.installed')
 
 
