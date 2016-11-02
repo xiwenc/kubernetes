@@ -15,8 +15,21 @@ then
 fi
 
 # get the host from the config file
-SERVER=$(cat /home/ubuntu/.kube/config | grep server | sed 's/    server://')
+SERVER=$(cat /home/ubuntu/.kube/config | grep server | sed 's/    server: //')
 
-ginkgo -nodes=$PARALLELISM $(which e2e.test) -- -kubeconfig /home/ubuntu/.kube/config -host $SERVER -ginkgo.focus $FOCUS -ginkgo.skip "$SKIP" 2>&1 | tee /home/ubuntu/${JUJU_ACTION_UUID}.log
+ACTION_HOME=/home/ubuntu
+ACTION_LOG=$ACTION_HOME/${JUJU_ACTION_UUID}.log
+ACTION_JUNIT=$ACTION_HOME/${JUJU_ACTION_UUID}-junit
+ACTION_JUNIT_TGZ=$ACTION_JUNIT.tar.gz
 
-action-set result.output=$(cat /home/ubuntu/${JUJU_ACTION_UUID}.log)
+ginkgo -nodes=$PARALLELISM $(which e2e.test) -- \
+  -kubeconfig /home/ubuntu/.kube/config \
+  -host $SERVER \
+  -ginkgo.focus $FOCUS \
+  -ginkgo.skip "$SKIP" \
+  -report-dir $ACTION_JUNIT 2>&1 | tee $ACTION_LOG
+
+tar -cf $ACTION_JUNIT_TGZ $ACTION_JUNIT
+
+action-set log="$ACTION_LOG"
+action-set junit="$ACTION_JUNIT_TGZ"
