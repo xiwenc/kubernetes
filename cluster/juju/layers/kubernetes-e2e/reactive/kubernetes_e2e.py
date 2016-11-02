@@ -3,6 +3,7 @@ import platform
 
 from charms import layer
 
+from charms.reactive import hook
 from charms.reactive import is_state
 from charms.reactive import remove_state
 from charms.reactive import set_state
@@ -20,6 +21,7 @@ from subprocess import check_output
 
 @hook('upgrade-charm')
 def reset_delivery_states():
+    ''' this removes a state. Guess which one '''
     remove_state('kubernetes-e2e.installed')
 
 
