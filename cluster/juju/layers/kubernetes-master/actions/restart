@@ -15,4 +15,3 @@ action-set 'controller-manager.status' 'restarted'
 systemctl restart kube-scheduler
 
 action-set 'kube-scheduler.status' 'restarted'
-

@@ -1,7 +1,7 @@
-restart-master:
-  description: restart the apiserver, controller-manager, and scheduler
+restart:
+  description: Restart the Kubernetes master services on demand.
 create-rbd-pv:
-  description: Create persistant storage when related to ceph
+  description: Create RADOS Block Device (RDB) volume in Ceph and creates PersistantVoluem in Kubernetes.
   params:
     name:
       type: string
