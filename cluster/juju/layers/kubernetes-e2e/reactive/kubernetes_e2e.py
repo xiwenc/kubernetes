@@ -104,11 +104,17 @@ def prepare_kubeconfig_certificates(master):
 
     servers = get_kube_api_servers(master)
 
+    # pedantry
+    kubeconfig_path = '/home/ubuntu/.kube/config'
+
     # Create kubernetes configuration in the default location for ubuntu.
     create_kubeconfig('/root/.kube/config', servers[0], ca, key, cert,
                       user='root')
-    create_kubeconfig('/home/ubuntu/.kube/config', servers[0], ca, key, cert,
+    create_kubeconfig(kubeconfig_path, servers[0], ca, key, cert,
                       user='ubuntu')
+    # Set permissions on the ubuntu users kubeconfig to ensure a consistent UX
+    cmd = ['chown', 'ubuntu:ubuntu', kubeconfig_path]
+    check_call(cmd)
 
     set_state('kubeconfig.ready')
 
