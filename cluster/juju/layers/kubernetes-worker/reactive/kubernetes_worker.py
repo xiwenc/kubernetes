@@ -178,11 +178,9 @@ def render_and_launch_ingress(kube_dns):
     ''' If configuration has ingress RC enabled, launch the ingress load
     balancer and default http backend. Otherwise attempt deletion. '''
     config = hookenv.config()
-    # If ingress is enabled, launch the ingress controller and open ports
+    # If ingress is enabled, launch the ingress controller
     if config.get('ingress'):
         launch_default_ingress_controller()
-        hookenv.open_port(80)
-        hookenv.open_port(443)
     else:
         hookenv.log('Deleting the http backend and ingress.')
         kubectl_manifest('delete',
@@ -197,10 +195,12 @@ def render_and_launch_ingress(kube_dns):
 def scale_ingress_controller():
     ''' Scale the number of ingress controller replicas to match the number of
     nodes. '''
-    output = kubectl('get', 'nodes', '-o', 'name')
-    count = len(output.splitlines())
-    if data_changed('ingress-controller-replicas', count):
+    try:
+        output = kubectl('get', 'nodes', '-o', 'name')
+        count = len(output.splitlines())
         kubectl('scale', '--replicas=%d' % count, 'rc/nginx-ingress-controller')  # noqa
+    except CalledProcessError:
+        hookenv.log('Failed to scale ingress controllers. Will attempt again next update.')  # noqa
 
 
 def arch():
@@ -311,9 +311,15 @@ def launch_default_ingress_controller():
     # Render the ingress replication controller manifest
     manifest = addon_path.format('ingress-replication-controller.yaml')
     render('ingress-replication-controller.yaml', manifest, context)
-    kubectl_manifest('create', manifest)
-    hookenv.log('Creating the ingress replication controller.')
-    set_state('kubernetes-worker.ingress.available')
+    if kubectl_manifest('create', manifest):
+        hookenv.log('Creating the ingress replication controller.')
+        set_state('kubernetes-worker.ingress.available')
+        hookenv.open_port(80)
+        hookenv.open_port(443)
+    else:
+        hookenv.log('Failed to create ingress controller. Will attempt again next update.')  # noqa
+        hookenv.close_port(80)
+        hookenv.close_port(443)
 
 
 def restart_unit_services():
