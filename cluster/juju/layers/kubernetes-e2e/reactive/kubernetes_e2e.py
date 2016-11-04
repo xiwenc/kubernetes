@@ -99,7 +99,8 @@ def install_kubernetes_e2e():
 
 
 @when('tls_client.ca.saved', 'tls_client.client.certificate.saved',
-      'tls_client.client.key.saved', 'kubernetes-master.available')
+      'tls_client.client.key.saved', 'kubernetes-master.available',
+      'kubernetes-e2e.installed')
 @when_not('kubeconfig.ready')
 def prepare_kubeconfig_certificates(master):
     ''' Prepare the data to feed to create the kubeconfig file. '''
