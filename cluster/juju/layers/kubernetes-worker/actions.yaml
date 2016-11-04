@@ -6,12 +6,12 @@ resume:
       UnCordon the unit, enabling workload scheduling.
 microbot:
     description: Launch microbot containers
-    options:
+    params:
       replicas:
-        type: int
+        type: integer
         default: 3
         description: Number of microbots to launch in Kubernetes.
       delete:
-        type: bool
+        type: boolean
         default: False
         description: Removes a microbots deployment, service, and ingress if True.

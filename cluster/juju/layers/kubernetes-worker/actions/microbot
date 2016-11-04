@@ -14,6 +14,9 @@ context['replicas'] = action_get('replicas')
 context['delete'] = action_get('delete')
 context['public_address'] = unit_public_ip()
 
+if not context['replicas']:
+    context['replicas'] = 3
+
 # Declare a kubectl template when invoking kubectl
 kubectl = ['kubectl', '--kubeconfig=/srv/kubernetes/config']
 
