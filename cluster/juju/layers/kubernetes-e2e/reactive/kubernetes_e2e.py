@@ -1,5 +1,4 @@
 import os
-import platform
 
 from charms import layer
 
@@ -49,6 +48,7 @@ def messaging():
 
     hookenv.status_set('active', 'Ready to test.')
 
+
 @when_not('kubernetes-e2e.installed')
 def install_kubernetes_e2e():
     ''' Deliver the e2e and kubectl components from the binary resource stream
@@ -78,7 +78,7 @@ def install_kubernetes_e2e():
                            'Incomplete {} resource.'.format(resource))
         return
 
-    hookenv.status_set('maintenance', 'Unpacking {} resource.'.format(resource))
+    hookenv.status_set('maintenance', 'Unpacking {} resource.'.format(resource))  # noqa
 
     unpack_path = '{}/files/kubernetes'.format(charm_dir)
     os.makedirs(unpack_path, exist_ok=True)
@@ -86,14 +86,13 @@ def install_kubernetes_e2e():
     hookenv.log(cmd)
     check_call(cmd)
 
-    services = ['e2e.test', 'kubectl']
+    services = ['e2e.test', 'ginkgo', 'kubectl']
 
     for service in services:
         unpacked = '{}/{}'.format(unpack_path, service)
         app_path = '/usr/local/bin/{}'.format(service)
         install = ['install', '-v', unpacked, app_path]
         call(install)
-
 
     set_state('kubernetes-e2e.installed')
 
