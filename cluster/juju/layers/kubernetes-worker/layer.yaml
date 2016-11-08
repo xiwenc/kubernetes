@@ -3,6 +3,7 @@ includes:
   - 'layer:basic'
   - 'layer:docker'
   - 'layer:tls-client'
+  - 'layer:sos'
   - 'interface:http'
   - 'interface:sdn-plugin'
   - 'interface:kube-dns'
