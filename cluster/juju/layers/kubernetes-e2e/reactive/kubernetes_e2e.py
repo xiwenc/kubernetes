@@ -78,7 +78,8 @@ def install_kubernetes_e2e():
                            'Incomplete {} resource.'.format(resource))
         return
 
-    hookenv.status_set('maintenance', 'Unpacking {} resource.'.format(resource))  # noqa
+    hookenv.status_set('maintenance',
+                       'Unpacking {} resource.'.format(resource))
 
     unpack_path = '{}/files/kubernetes'.format(charm_dir)
     os.makedirs(unpack_path, exist_ok=True)
