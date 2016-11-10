@@ -4,5 +4,5 @@ set -ux
 # We had to bump inotify limits once in the past, hence why this oddly specific
 # script lives here in kubernetes-worker.
 
-sysctl fs.inotify > $SOS_SCRIPT_DIR/sysctl-limits
-ls -l /proc/*/fd/* | grep inotify > $SOS_SCRIPT_DIR/inotify-instances
+sysctl fs.inotify > $DEBUG_SCRIPT_DIR/sysctl-limits
+ls -l /proc/*/fd/* | grep inotify > $DEBUG_SCRIPT_DIR/inotify-instances
