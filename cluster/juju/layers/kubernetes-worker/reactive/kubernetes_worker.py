@@ -203,6 +203,34 @@ def scale_ingress_controller():
         hookenv.log('Failed to scale ingress controllers. Will attempt again next update.')  # noqa
 
 
+@when('config.changed.labels', 'kubernetes-worker.config.created')
+def apply_node_labels():
+    ''' Parse the labels configuration option and apply the labels to the node.
+    '''
+    # scrub and try to format an array from the configuration option
+    config = hookenv.config()
+    user_labels = _parse_labels(config.get('labels'))
+
+    # For diffing sake, iterate the previous label set
+    previous_labels = _parse_labels(config.previous('labels'))
+    hookenv.log('previous labels: {}'.format(previous_labels))
+
+    # Calculate label removal
+    for label in previous_labels:
+        if label not in user_labels:
+            hookenv.log('Deleting node label {}'.format(label))
+            try:
+                _apply_node_label(label, delete=True)
+            except CalledProcessError:
+                hookenv.log('Error removing node label {}'.format(label))
+        # if the label is in user labels we do nothing here, it will get set
+        # during the atomic update below.
+
+    # Atomically set a label
+    for label in user_labels:
+        _apply_node_label(label)
+
+
 def arch():
     '''Return the package architecture as a string. Raise an exception if the
     architecture is not supported by kubernetes.'''
@@ -395,3 +423,31 @@ def _systemctl_is_active(application):
         return b'active' in raw
     except Exception:
         return False
+
+
+def _apply_node_label(label, delete=False):
+    ''' Invoke kubectl to apply node label changes '''
+
+    hostname = gethostname()
+    # TODO: Make this part of the kubectl calls instead of a special string
+    cmd_base = 'kubectl --kubeconfig=/srv/kubernetes/config label node {0} {1}'
+
+    if delete is True:
+        label_key = label.split('=')[0]
+        cmd = cmd_base.format(hostname, label_key)
+        cmd = cmd + '-'
+    else:
+        cmd = cmd_base.format(hostname, label)
+    check_call(split(cmd))
+
+
+def _parse_labels(labels):
+    ''' Parse labels from a key=value string separated by space.'''
+    label_array = labels.split(' ')
+    sanitized_labels = []
+    for item in label_array:
+        if '=' in item:
+            sanitized_labels.append(item)
+        else:
+            hookenv.log('Skipping malformed option: {}'.format(item))
+    return sanitized_labels
