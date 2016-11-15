@@ -47,6 +47,8 @@ def reset_states_for_delivery():
         host.service_stop(service)
     remove_state('kubernetes-master.components.started')
     remove_state('kubernetes-master.components.installed')
+    remove_state('kube-dns.available')
+    remove_state('kubernetes.dashboard.available')
 
 
 @when_not('kubernetes-master.components.installed')
