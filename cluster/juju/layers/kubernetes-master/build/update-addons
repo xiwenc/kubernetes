@@ -38,8 +38,8 @@ def get_kubernetes_repo():
     else:
         sh("git clone https://github.com/kubernetes/kubernetes.git")
 
-def copy_addon(source, name=None):
-    """ Copy an addon from the given source.
+def add_addon(source, name=None):
+    """ Add an addon manifest from the given source.
 
     Any occurrences of 'amd64' are replaced with '{{ arch }}' so the charm can
     fill it in during deployment. """
@@ -53,19 +53,20 @@ def copy_addon(source, name=None):
         f.write(content)
 
 def update_addons():
-    """ Update addons. """
-    get_kubernetes_repo()
+    """ Update addons. This will clean the templates/addons folder and add new
+    manifests from upstream. """
     clean_addons_folder()
-    print("Copying addons")
-    copy_addon("kubernetes/cluster/addons/dashboard/dashboard-controller.yaml")
-    copy_addon("kubernetes/cluster/addons/dashboard/dashboard-service.yaml")
-    copy_addon("kubernetes/cluster/addons/dns/skydns-rc.yaml.in", "kubedns-rc.yaml")
-    copy_addon("kubernetes/cluster/addons/dns/skydns-svc.yaml.in", "kubedns-svc.yaml")
-    copy_addon("kubernetes/cluster/addons/cluster-monitoring/influxdb/grafana-service.yaml")
-    copy_addon("kubernetes/cluster/addons/cluster-monitoring/influxdb/heapster-controller.yaml")
-    copy_addon("kubernetes/cluster/addons/cluster-monitoring/influxdb/heapster-service.yaml")
-    copy_addon("kubernetes/cluster/addons/cluster-monitoring/influxdb/influxdb-grafana-controller.yaml")
-    copy_addon("kubernetes/cluster/addons/cluster-monitoring/influxdb/influxdb-service.yaml")
+    get_kubernetes_repo()
+    print("Adding addons")
+    add_addon("kubernetes/cluster/addons/dashboard/dashboard-controller.yaml")
+    add_addon("kubernetes/cluster/addons/dashboard/dashboard-service.yaml")
+    add_addon("kubernetes/cluster/addons/dns/skydns-rc.yaml.in", "kubedns-rc.yaml")
+    add_addon("kubernetes/cluster/addons/dns/skydns-svc.yaml.in", "kubedns-svc.yaml")
+    add_addon("kubernetes/cluster/addons/cluster-monitoring/influxdb/grafana-service.yaml")
+    add_addon("kubernetes/cluster/addons/cluster-monitoring/influxdb/heapster-controller.yaml")
+    add_addon("kubernetes/cluster/addons/cluster-monitoring/influxdb/heapster-service.yaml")
+    add_addon("kubernetes/cluster/addons/cluster-monitoring/influxdb/influxdb-grafana-controller.yaml")
+    add_addon("kubernetes/cluster/addons/cluster-monitoring/influxdb/influxdb-service.yaml")
 
 def parse_args():
     parser = argparse.ArgumentParser(description=description)
