@@ -1,9 +1,9 @@
 #!/usr/bin/python3
 
 description = """
-Update addon manifests in the charm.
+Update addon manifests for the charm.
 
-This will clone the kubernetes repo and replace the addons in
+This will clone the kubernetes repo and place the addons in
 <charm>/build/addons.
 
 Can be run with no arguments and from any folder.

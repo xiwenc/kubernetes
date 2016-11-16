@@ -2,7 +2,7 @@ import shutil
 import subprocess
 from charmtools.build.tactics import Tactic
 
-class UpdateAddonsTactic(Tactic):
+class AddonsTactic(Tactic):
     @classmethod
     def trigger(cls, relpath):
         return relpath == "build"
