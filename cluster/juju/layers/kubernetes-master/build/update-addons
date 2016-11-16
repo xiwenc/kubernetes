@@ -1,5 +1,15 @@
 #!/usr/bin/python3
 
+description = """
+Update addon manifests in the charm.
+
+This will clone the kubernetes repo and replace the addons in
+<charm>/templates/addons.
+
+Can be run with no arguments and from any folder.
+"""
+
+import argparse
 import os
 import shutil
 import subprocess
@@ -57,5 +67,10 @@ def update_addons():
     copy_addon("kubernetes/cluster/addons/cluster-monitoring/influxdb/influxdb-grafana-controller.yaml")
     copy_addon("kubernetes/cluster/addons/cluster-monitoring/influxdb/influxdb-service.yaml")
 
+def parse_args():
+    parser = argparse.ArgumentParser(description=description)
+    parser.parse_args()
+
 if __name__ == "__main__":
+    parse_args()
     update_addons()
