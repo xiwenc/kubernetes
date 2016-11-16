@@ -45,7 +45,7 @@ def copy_addon(source, name=None):
     fill it in during deployment. """
     name = name or os.path.basename(source)
     dest = target + "/" + name
-    print("%s > %s" % (source, dest))
+    print("'%s' -> '%s'" % (source, dest))
     with open(source, "r") as f:
         content = f.read()
     content = content.replace("amd64", "{{ arch }}")
