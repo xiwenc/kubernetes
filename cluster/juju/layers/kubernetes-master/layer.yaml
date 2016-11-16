@@ -15,6 +15,7 @@ options:
     server_key_path: '/srv/kubernetes/server.key'
     client_certificate_path: '/srv/kubernetes/client.crt'
     client_key_path: '/srv/kubernetes/client.key'
+tactics:
+  - 'tactics.update_addons.UpdateAddonsTactic'
 exclude:
-  - 'Makefile'
   - 'build'

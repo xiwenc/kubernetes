@@ -4,7 +4,7 @@ description = """
 Update addon manifests in the charm.
 
 This will clone the kubernetes repo and replace the addons in
-<charm>/templates/addons.
+<charm>/build/addons.
 
 Can be run with no arguments and from any folder.
 """
@@ -15,7 +15,7 @@ import shutil
 import subprocess
 
 os.chdir(os.path.dirname(__file__))
-target = os.path.abspath("../templates/addons")
+target = os.path.abspath("addons")
 
 def sh(cmd):
     """ Alias for subprocess calls """
@@ -53,8 +53,8 @@ def add_addon(source, name=None):
         f.write(content)
 
 def update_addons():
-    """ Update addons. This will clean the templates/addons folder and add new
-    manifests from upstream. """
+    """ Update addons. This will clean the addons folder and add new manifests
+    from upstream. """
     clean_addons_folder()
     get_kubernetes_repo()
     print("Adding addons")
