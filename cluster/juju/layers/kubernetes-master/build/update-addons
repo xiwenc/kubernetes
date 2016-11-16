@@ -4,7 +4,7 @@ description = """
 Update addon manifests for the charm.
 
 This will clone the kubernetes repo and place the addons in
-<charm>/build/addons.
+<charm>/templates/addons.
 
 Can be run with no arguments and from any folder.
 """
@@ -15,7 +15,7 @@ import shutil
 import subprocess
 
 os.chdir(os.path.dirname(__file__))
-target = os.path.abspath("addons")
+target = os.path.abspath("../templates/addons")
 
 def sh(cmd):
     """ Alias for subprocess calls """
