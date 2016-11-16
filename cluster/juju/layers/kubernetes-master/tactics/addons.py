@@ -2,9 +2,11 @@ import subprocess
 from charmtools.build.tactics import Tactic
 
 class AddonsTactic(Tactic):
+    """ Dirty hack tactic to update addon templates before we walk the
+    templates/ folder """
+
     @classmethod
     def trigger(cls, relpath):
-        return relpath == "templates/addons"
-
-    def __call__(self):
-        subprocess.check_call("build/update-addons")
+        if relpath == "templates":
+            subprocess.check_call("build/update-addons")
+        return False
