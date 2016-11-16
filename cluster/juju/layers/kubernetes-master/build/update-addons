@@ -1,31 +1,61 @@
-#!/bin/bash
-set -eux
+#!/usr/bin/python3
 
-cd $(dirname $0)
+import os
+import shutil
+import subprocess
 
-target=../templates/addons
+os.chdir(os.path.dirname(__file__))
+target = os.path.abspath("../templates/addons")
 
-# get kubernetes repo
-if [ -d kubernetes ]; then
-  cd kubernetes
-  git pull
-  cd ..
-else
-  git clone https://github.com/kubernetes/kubernetes.git
-fi
+def sh(cmd):
+    """ Alias for subprocess calls """
+    subprocess.check_call(cmd.split())
 
-# start from a clean folder
-rm -rf $target
-mkdir $target
+def clean_addons_folder():
+    """ Remove and recreate the addons folder """
+    print("Cleaning addons folder")
+    shutil.rmtree(target, ignore_errors=True)
+    os.mkdir(target)
 
-# copy the addons over
-cp kubernetes/cluster/addons/dashboard/*.yaml $target
-for file in kubernetes/cluster/addons/dns/*.yaml.in; do
-  cp $file $target/$(echo $(basename $file) | sed 's/skydns/kubedns/' | sed 's/\.in//')
-done
-cp kubernetes/cluster/addons/cluster-monitoring/influxdb/*.yaml $target
+def get_kubernetes_repo():
+    """ Git clone the kubernetes repo. If the repo already exists from a
+    previous build, git pull instead. """
+    print("Getting the Kubernetes repo")
+    if os.path.exists("kubernetes"):
+        os.chdir("kubernetes")
+        sh("git pull")
+        os.chdir("..")
+    else:
+        sh("git clone https://github.com/kubernetes/kubernetes.git")
 
-# replace amd64 with {{ arch }}
-for file in $target/*.yaml; do
-  sed -i 's/amd64/{{ arch }}/g' $file
-done
+def copy_addon(source, name=None):
+    """ Copy an addon from the given source.
+
+    Any occurrences of 'amd64' are replaced with '{{ arch }}' so the charm can
+    fill it in during deployment. """
+    name = name or os.path.basename(source)
+    dest = target + "/" + name
+    print("%s > %s" % (source, dest))
+    with open(source, "r") as f:
+        content = f.read()
+    content = content.replace("amd64", "{{ arch }}")
+    with open(target + "/" + name, "w") as f:
+        f.write(content)
+
+def update_addons():
+    """ Update addons. """
+    get_kubernetes_repo()
+    clean_addons_folder()
+    print("Copying addons")
+    copy_addon("kubernetes/cluster/addons/dashboard/dashboard-controller.yaml")
+    copy_addon("kubernetes/cluster/addons/dashboard/dashboard-service.yaml")
+    copy_addon("kubernetes/cluster/addons/dns/skydns-rc.yaml.in", "kubedns-rc.yaml")
+    copy_addon("kubernetes/cluster/addons/dns/skydns-svc.yaml.in", "kubedns-svc.yaml")
+    copy_addon("kubernetes/cluster/addons/cluster-monitoring/influxdb/grafana-service.yaml")
+    copy_addon("kubernetes/cluster/addons/cluster-monitoring/influxdb/heapster-controller.yaml")
+    copy_addon("kubernetes/cluster/addons/cluster-monitoring/influxdb/heapster-service.yaml")
+    copy_addon("kubernetes/cluster/addons/cluster-monitoring/influxdb/influxdb-grafana-controller.yaml")
+    copy_addon("kubernetes/cluster/addons/cluster-monitoring/influxdb/influxdb-service.yaml")
+
+if __name__ == "__main__":
+    update_addons()
