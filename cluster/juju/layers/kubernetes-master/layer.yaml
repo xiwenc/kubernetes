@@ -16,6 +16,4 @@ options:
     client_certificate_path: '/srv/kubernetes/client.crt'
     client_key_path: '/srv/kubernetes/client.key'
 tactics:
-  - 'tactics.addons.AddonsTactic'
-exclude:
-  - 'build'
+  - 'tactics.update_addons.UpdateAddonsTactic'
