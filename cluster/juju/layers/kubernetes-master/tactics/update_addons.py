@@ -72,18 +72,30 @@ def update_addons(dest):
 # Entry points
 
 class UpdateAddonsTactic(Tactic):
+    """ This tactic is used by charm-tools to dynamically populate the
+    template/addons folder at `charm build` time. """
+
     @classmethod
     def trigger(cls, relpath):
+        """ Determines which files the tactic should apply to. We only want
+        this tactic to trigger once, so let's use the templates/ folder
+        """
         return relpath == "templates"
 
     @property
     def dest(self):
+        """ The destination we are writing to. This isn't a Tactic thing,
+        it's just a helper for UpdateAddonsTactic """
         return self.target / "templates" / "addons"
 
     def __call__(self):
+        """ When the tactic is called, update addons and put them directly in
+        our build destination """
         update_addons(self.dest)
 
     def sign(self):
+        """ Return signatures for the charm build manifest. We need to do this
+        because the addon template files were added dynamically """
         sigs = {}
         for file in os.listdir(self.dest):
             path = self.dest / file
@@ -96,10 +108,15 @@ class UpdateAddonsTactic(Tactic):
         return sigs
 
 def parse_args():
+    """ Parse args. This is solely done for the usage output with -h """
     parser = argparse.ArgumentParser(description=description)
     parser.parse_args()
 
-if __name__ == "__main__":
+def main():
+    """ Update addons into the layer's templates/addons folder """
     parse_args()
     dest = os.path.abspath(os.path.join(os.path.dirname(__file__), "../templates/addons"))
     update_addons(dest)
+
+if __name__ == "__main__":
+    main()
