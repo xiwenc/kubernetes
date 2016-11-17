@@ -9,6 +9,9 @@ includes:
   - 'interface:ceph-admin'
   - 'interface:public-address'
 options:
+  basic:
+    packages:
+      - socat
   tls-client:
     ca_certificate_path: '/srv/kubernetes/ca.crt'
     server_certificate_path: '/srv/kubernetes/server.crt'
