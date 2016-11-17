@@ -30,8 +30,11 @@ ginkgo -nodes=$PARALLELISM $(which e2e.test) -- \
   -ginkgo.skip "$SKIP" \
   -report-dir $ACTION_JUNIT 2>&1 | tee $ACTION_LOG
 
-tar -czf $ACTION_LOG_TGZ $ACTION_LOG
-tar -czf $ACTION_JUNIT_TGZ $ACTION_JUNIT
+# set cwd to /home/ubuntu and tar the artifacts using a minimal directory
+# path. Extracing "home/ubuntu/1412341234/foobar.log is cumbersome in ci
+cd $ACTION_HOME
+tar -czf $ACTION_LOG_TGZ ${JUJU_ACTION_UUID}.log
+tar -czf $ACTION_JUNIT_TGZ ${JUJU_ACTION_UUID}-junit/*
 
 action-set log="$ACTION_LOG_TGZ"
 action-set junit="$ACTION_JUNIT_TGZ"
