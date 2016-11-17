@@ -32,9 +32,10 @@ ginkgo -nodes=$PARALLELISM $(which e2e.test) -- \
 
 # set cwd to /home/ubuntu and tar the artifacts using a minimal directory
 # path. Extracing "home/ubuntu/1412341234/foobar.log is cumbersome in ci
-cd $ACTION_HOME
+cd $ACTION_HOME/${JUJU_ACTION_UUID}-junit
+tar -czf $ACTION_JUNIT_TGZ *
+cd ..
 tar -czf $ACTION_LOG_TGZ ${JUJU_ACTION_UUID}.log
-tar -czf $ACTION_JUNIT_TGZ ${JUJU_ACTION_UUID}-junit/*
 
 action-set log="$ACTION_LOG_TGZ"
 action-set junit="$ACTION_JUNIT_TGZ"
