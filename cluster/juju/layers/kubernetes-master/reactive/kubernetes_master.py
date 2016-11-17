@@ -27,7 +27,8 @@ from charmhelpers.fetch import apt_install
 
 
 dashboard_templates = [
-    'kubernetes-dashboard.yaml',
+    'dashboard-controller.yaml',
+    'dashboard-service.yaml',
     'influxdb-grafana-controller.yaml',
     'influxdb-service.yaml',
     'grafana-service.yaml',
@@ -397,8 +398,9 @@ def ceph_storage(ceph_admin):
 
 def create_addon(template, context):
     '''Create an addon from a template'''
+    source = 'addons/' + template
     target = '/etc/kubernetes/addons/' + template
-    render(template, target, context)
+    render(source, target, context)
     cmd = ['kubectl', 'apply', '-f', target]
     check_call(cmd)
 
