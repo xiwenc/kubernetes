@@ -1,11 +1,13 @@
 #!/bin/sh
 set -ux
 
-sudo -iu ubuntu kubectl cluster-info > $DEBUG_SCRIPT_DIR/cluster-info
-sudo -iu ubuntu kubectl cluster-info dump > $DEBUG_SCRIPT_DIR/cluster-info-dump
+alias kubectl="kubectl --kubeconfig=/srv/kubernetes/config"
+
+kubectl cluster-info > $DEBUG_SCRIPT_DIR/cluster-info
+kubectl cluster-info dump > $DEBUG_SCRIPT_DIR/cluster-info-dump
 for obj in pods svc ingress secrets pv pvc rc; do
-  sudo -iu ubuntu kubectl describe $obj --all-namespaces > $DEBUG_SCRIPT_DIR/describe-$obj
+  kubectl describe $obj --all-namespaces > $DEBUG_SCRIPT_DIR/describe-$obj
 done
 for obj in nodes; do
-  sudo -iu ubuntu kubectl describe $obj > $DEBUG_SCRIPT_DIR/describe-$obj
+  kubectl describe $obj > $DEBUG_SCRIPT_DIR/describe-$obj
 done
