@@ -4,8 +4,8 @@ includes:
   - 'layer:tls-client'
   - 'interface:etcd'
   - 'interface:http'
-  - 'interface:sdn-plugin'
-  - 'interface:kube-dns'
+  - 'interface:kubernetes-cni'
+  # - 'interface:kube-dns'
   - 'interface:ceph-admin'
   - 'interface:public-address'
 options:

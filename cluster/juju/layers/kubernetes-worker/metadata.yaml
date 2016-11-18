@@ -17,8 +17,11 @@ subordinate: false
 requires:
   kube-api-endpoint:
     interface: http
-  kube-dns:
-    interface: kube-dns
+  # kube-dns:
+  #   interface: kube-dns
+provides:
+  cni:
+    interface: kubernetes-cni
 resources:
   kubernetes:
     type: file
