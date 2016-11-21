@@ -128,6 +128,7 @@ def setup_authentication():
 
     api_opts.add('--basic-auth-file', '/srv/kubernetes/basic_auth.csv')
     api_opts.add('--token-auth-file', '/srv/kubernetes/known_tokens.csv')
+    api_opts.add('--service-cluster-ip-range', '10.152.183.0/24') # FIXME: CIDR??
     hookenv.status_set('maintenance', 'Rendering authentication templates.')
     htaccess = '/srv/kubernetes/basic_auth.csv'
     if not os.path.isfile(htaccess):
