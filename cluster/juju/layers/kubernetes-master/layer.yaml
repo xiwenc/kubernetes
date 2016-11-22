@@ -5,7 +5,7 @@ includes:
   - 'interface:etcd'
   - 'interface:http'
   - 'interface:kubernetes-cni'
-  # - 'interface:kube-dns'
+  - 'interface:kube-dns'
   - 'interface:ceph-admin'
   - 'interface:public-address'
 options:

@@ -161,16 +161,12 @@ def set_app_version():
     hookenv.application_version_set(version.split(b' v')[-1].rstrip())
 
 
-# @when('kube-dns.available', 'kube-sdn.configured',
-#       'kubernetes-master.components.installed')
-@when('kubernetes-master.components.installed')
+@when('kube-dns.available', 'kubernetes-master.components.installed')
 def ready_messaging():
     ''' Signal at the end of the run that we are running. '''
     hookenv.status_set('active', 'Kubernetes master running.')
 
 
-# @when('etcd.available', 'kubernetes-master.components.installed',
-#       'kube-sdn.configured', 'certificates.server.cert.available')
 @when('etcd.available', 'kubernetes-master.components.installed',
       'certificates.server.cert.available')
 @when_not('kubernetes-master.components.started')
@@ -194,14 +190,13 @@ def start_master(etcd, tls):
     set_state('kubernetes-master.components.started')
 
 
-# @when('cluster-dns.connected', 'sdn-plugin.available')
-# def send_cluster_dns_detail(cluster_dns, sdn_plugin):
-#     ''' Send cluster DNS info '''
-#     # Note that the DNS server doesn't necessarily exist at this point. We know
-#     # where we're going to put it, though, so let's send the info anyway.
-#     details = sdn_plugin.get_sdn_config()
-#     dns_ip = get_dns_ip(details['cidr'])
-#     cluster_dns.set_dns_info(53, hookenv.config('dns_domain'), dns_ip)
+@when('cluster-dns.connected', 'sdn-plugin.available')
+def send_cluster_dns_detail(cluster_dns):
+    ''' Send cluster DNS info '''
+    # Note that the DNS server doesn't necessarily exist at this point. We know
+    # where we're going to put it, though, so let's send the info anyway.
+    dns_ip = get_dns_ip()
+    cluster_dns.set_dns_info(53, hookenv.config('dns_domain'), dns_ip)
 
 
 @when('kube-api-endpoint.available')
@@ -211,47 +206,14 @@ def push_service_data(kube_api):
     kube_api.configure(port=6443)
 
 
-# @when('certificates.available', 'sdn-plugin.available')
-# def send_data(tls, sdn_plugin):
-#     '''Send the data that is required to create a server certificate for
-#     this server.'''
-#     # Use the public ip of this unit as the Common Name for the certificate.
-#     common_name = hookenv.unit_public_ip()
-#     # Get the SDN cidr from the relation object.
-#     sdn_cidr = sdn_plugin.get_sdn_config().get('cidr')
-#     # Get the SDN gateway based on the cidr address.
-#     sdn_ip = get_sdn_ip(sdn_cidr)
-#     domain = hookenv.config('dns_domain')
-#     # Create SANs that the tls layer will add to the server cert.
-#     sans = [
-#         hookenv.unit_public_ip(),
-#         hookenv.unit_private_ip(),
-#         socket.gethostname(),
-#         sdn_ip,
-#         'kubernetes',
-#         'kubernetes.{0}'.format(domain),
-#         'kubernetes.default',
-#         'kubernetes.default.svc',
-#         'kubernetes.default.svc.{0}'.format(domain)
-#     ]
-#     # Create a path safe name by removing path characters from the unit name.
-#     certificate_name = hookenv.local_unit().replace('/', '_')
-#     # Request a server cert with this information.
-#     tls.request_server_cert(common_name, sans, certificate_name)
-
-
 @when('certificates.available')
 def send_data(tls):
     '''Send the data that is required to create a server certificate for
     this server.'''
     # Use the public ip of this unit as the Common Name for the certificate.
     common_name = hookenv.unit_public_ip()
-    # Get the SDN cidr from the relation object.
-
-    # sdn_cidr = sdn_plugin.get_sdn_config().get('cidr')
 
     # Get the SDN gateway based on the cidr address.
-
     sdn_ip = get_sdn_ip()
 
     domain = hookenv.config('dns_domain')
@@ -282,18 +244,6 @@ def push_api_data(kube_api):
     kube_api.set_api_port('6443')
 
 
-# @when('kubernetes-master.components.installed', 'sdn-plugin.available')
-# def gather_sdn_data(sdn_plugin):
-#     sdn_data = sdn_plugin.get_sdn_config()
-#     if not sdn_data['cidr'] or not sdn_data['subnet'] or not sdn_data['mtu']:
-#         hookenv.status_set('waiting', 'Waiting on SDN configuration.')
-#         return
-#     api_opts = FlagManager('kube-apiserver')
-#     api_opts.add('--service-cluster-ip-range', sdn_data['cidr'])
-#     set_state('kube-sdn.configured')
-
-
-# @when('kubernetes-master.components.started', 'kube-dns.available')
 @when('kubernetes-master.components.started')
 @when_not('kubernetes.dashboard.available')
 def install_dashboard_addons():
@@ -311,7 +261,6 @@ def install_dashboard_addons():
             hookenv.log('Kubernetes dashboard waiting on kubeapi')
 
 
-
 @when('kubernetes-master.components.started', 'kubernetes.dashboard.available')
 def remove_dashboard_addons():
     ''' Removes dashboard addons if they are disabled in config '''
@@ -322,35 +271,42 @@ def remove_dashboard_addons():
         remove_state('kubernetes.dashboard.available')
 
 
-# @when('kubernetes-master.components.installed', 'kube-sdn.configured',
-#       'sdn-plugin.available')
-# @when_not('kube-dns.available')
-# def start_kube_dns(sdn_plugin):
-#     ''' State guard to starting DNS '''
-#
-#     # Interrogate the cluster to find out if we have at least one worker
-#     # that is capable of running the workload.
-#
-#     cmd = ['kubectl', 'get', 'nodes']
-#     try:
-#         out = check_output(cmd)
-#         if b'NAME' not in out:
-#             hookenv.log('Unable to determine node count, waiting '
-#                         'until nodes are ready')
-#             return
-#     except CalledProcessError:
-#         hookenv.log('kube-apiserver not ready, not requesting dns deployment')
-#         return
-#
-#     message = 'Rendering the Kubernetes DNS files.'
-#     hookenv.log(message)
-#     hookenv.status_set('maintenance', message)
-#
-#     context = prepare_sdn_context(sdn_plugin)
-#     context['arch'] = arch()
-#     create_addon('kubedns-rc.yaml', context)
-#     create_addon('kubedns-svc.yaml', context)
-#     set_state('kube-dns.available')
+@when('kubernetes-master.components.installed', 'kube-sdn.configured',
+      'sdn-plugin.available')
+@when_not('kube-dns.available')
+def start_kube_dns(sdn_plugin):
+    ''' State guard to starting DNS '''
+
+    # Interrogate the cluster to find out if we have at least one worker
+    # that is capable of running the workload.
+
+    cmd = ['kubectl', 'get', 'nodes']
+    try:
+        out = check_output(cmd)
+        if b'NAME' not in out:
+            hookenv.log('Unable to determine node count, waiting '
+                        'until nodes are ready')
+            return
+    except CalledProcessError:
+        hookenv.log('kube-apiserver not ready, not requesting dns deployment')
+        return
+
+    message = 'Rendering the Kubernetes DNS files.'
+    hookenv.log(message)
+    hookenv.status_set('maintenance', message)
+
+    context = {
+        'arch': arch(),
+        # The dictionary named 'pillar' is a construct of the k8s template files.
+        'pillar': {
+            'dns_server': get_dns_ip(),
+            'dns_replicas': 1,
+            'dns_domain': hookenv.config('dns_domain')
+        }
+    }
+    create_addon('kubedns-rc.yaml', context)
+    create_addon('kubedns-svc.yaml', context)
+    set_state('kube-dns.available')
 
 
 @when('kubernetes-master.components.installed', 'loadbalancer.available',
@@ -548,12 +504,12 @@ def create_kubeconfig(kubeconfig, server, ca, key, certificate, user='ubuntu',
     check_call(split(cmd.format(kubeconfig, context)))
 
 
-# def get_dns_ip(cidr):
-#     '''Get an IP address for the DNS server on the provided cidr.'''
-#     # Remove the range from the cidr.
-#     ip = cidr.split('/')[0]
-#     # Take the last octet off the IP address and replace it with 10.
-#     return '.'.join(ip.split('.')[0:-1]) + '.10'
+def get_dns_ip():
+    '''Get an IP address for the DNS server on the provided cidr.'''
+    # Remove the range from the cidr.
+    ip = service_cluster_cidr.split('/')[0]
+    # Take the last octet off the IP address and replace it with 10.
+    return '.'.join(ip.split('.')[0:-1]) + '.10'
 
 
 # FIXME: this needs a rename
@@ -596,27 +552,6 @@ def handle_etcd_relation(reldata):
     api_opts.add('--etcd-keyfile', key)
     api_opts.add('--etcd-certfile', cert)
     api_opts.add('--etcd-servers', connection_string, strict=True)
-
-
-# def prepare_sdn_context(sdn_plugin=None):
-#     '''Get the Software Defined Network (SDN) information and return it as a
-#     dictionary. '''
-#     sdn_data = {}
-#     # The dictionary named 'pillar' is a construct of the k8s template files.
-#     pillar = {}
-#     # SDN Providers pass data via the sdn-plugin interface
-#     # Ideally the DNS address should come from the sdn cidr.
-#     plugin_data = sdn_plugin.get_sdn_config()
-#     if plugin_data.get('cidr'):
-#         # Generate the DNS ip address on the SDN cidr (this is desired).
-#         pillar['dns_server'] = get_dns_ip(plugin_data['cidr'])
-#     # The pillar['dns_server'] value is used the kubedns-svc.yaml file.
-#     pillar['dns_replicas'] = 1
-#     # The pillar['dns_domain'] value is used in the kubedns-rc.yaml
-#     pillar['dns_domain'] = hookenv.config('dns_domain')
-#     # Use a 'pillar' dictionary so we can reuse the upstream kubedns templates.
-#     sdn_data['pillar'] = pillar
-#     return sdn_data
 
 
 def render_files():
