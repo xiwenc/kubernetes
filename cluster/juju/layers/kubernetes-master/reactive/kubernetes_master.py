@@ -190,7 +190,7 @@ def start_master(etcd, tls):
     set_state('kubernetes-master.components.started')
 
 
-@when('cluster-dns.connected', 'sdn-plugin.available')
+@when('cluster-dns.connected')
 def send_cluster_dns_detail(cluster_dns):
     ''' Send cluster DNS info '''
     # Note that the DNS server doesn't necessarily exist at this point. We know
@@ -271,10 +271,9 @@ def remove_dashboard_addons():
         remove_state('kubernetes.dashboard.available')
 
 
-@when('kubernetes-master.components.installed', 'kube-sdn.configured',
-      'sdn-plugin.available')
+@when('kubernetes-master.components.installed')
 @when_not('kube-dns.available')
-def start_kube_dns(sdn_plugin):
+def start_kube_dns():
     ''' State guard to starting DNS '''
 
     # Interrogate the cluster to find out if we have at least one worker
