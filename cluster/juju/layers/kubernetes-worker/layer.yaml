@@ -5,7 +5,7 @@ includes:
   - 'layer:tls-client'
   - 'interface:http'
   - 'interface:kubernetes-cni'
-  # - 'interface:kube-dns'
+  - 'interface:kube-dns'
 options:
   basic:
     packages:

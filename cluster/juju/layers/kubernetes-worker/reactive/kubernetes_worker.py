@@ -87,14 +87,6 @@ def install_kubernetes_components():
         hookenv.log(install)
         check_call(install)
 
-    # services = ['kubelet', 'kube-proxy', 'kubectl']
-    #
-    # for service in services:
-    #     unpacked = '{}/{}'.format(unpack_path, service)
-    #     app_path = '/usr/local/bin/{}'.format(service)
-    #     install = ['install', '-v', unpacked, app_path]
-    #     call(install)
-
     set_state('kubernetes-worker.components.installed')
 
 
@@ -106,26 +98,23 @@ def set_app_version():
     hookenv.application_version_set(version.split(b' v')[-1].rstrip())
 
 
-# @when('kubernetes-worker.components.installed')
-# @when_not('kube-dns.available')
-# def notify_user_transient_status():
-#     ''' Notify to the user we are in a transient state and the application
-#     is still converging. Potentially remotely, or we may be in a detached loop
-#     wait state '''
-#
-#     # During deployment the worker has to start kubelet without cluster dns
-#     # configured. If this is the first unit online in a service pool waiting
-#     # to self host the dns pod, and configure itself to query the dns service
-#     # declared in the kube-system namespace
-#
-#     hookenv.status_set('waiting',
-#                        'Waiting for cluster-manager to initiate start.')
-
-
-# @when('kubernetes-worker.components.installed', 'kube-dns.available')
-# def charm_status(kube_dns):
 @when('kubernetes-worker.components.installed')
-def charm_status():
+@when_not('kube-dns.available')
+def notify_user_transient_status():
+    ''' Notify to the user we are in a transient state and the application
+    is still converging. Potentially remotely, or we may be in a detached loop
+    wait state '''
+
+    # During deployment the worker has to start kubelet without cluster dns
+    # configured. If this is the first unit online in a service pool waiting
+    # to self host the dns pod, and configure itself to query the dns service
+    # declared in the kube-system namespace
+
+    hookenv.status_set('waiting', 'Waiting for cluster DNS.')
+
+
+@when('kubernetes-worker.components.installed', 'kube-dns.available')
+def charm_status(kube_dns):
     '''Update the status message with the current status of kubelet.'''
     update_kubelet_status()
 
@@ -134,19 +123,6 @@ def update_kubelet_status():
     ''' There are different states that the kubelt can be in, where we are
     waiting for dns, waiting for cluster turnup, or ready to serve
     applications.'''
-    # Daemon options are managed by the FlagManager class
-    kubelet_opts = FlagManager('kubelet')
-
-    # Query the FlagManager dict for the dns option, and determine if
-    # kubelet is running
-
-    # if (_systemctl_is_active('kubelet') and
-    #    '--cluster-dns' not in kubelet_opts.data):
-    #     hookenv.status_set('waiting', 'Waiting for cluster DNS.')
-    # elif (_systemctl_is_active('kubelet') and
-    #       '--cluster-dns' in kubelet_opts.data):
-    #     hookenv.status_set('active', 'Kubernetes worker running.')
-
     if (_systemctl_is_active('kubelet')):
         hookenv.status_set('active', 'Kubernetes worker running.')
     # if kubelet is not running, we're waiting on something else to converge
@@ -154,14 +130,10 @@ def update_kubelet_status():
         hookenv.status_set('waiting', 'Waiting for kubelet to start.')
 
 
-# @when('kubernetes-worker.components.installed', 'kube-api-endpoint.available',
-#       'tls_client.ca.saved', 'tls_client.client.certificate.saved',
-#       'tls_client.client.key.saved', 'kube-dns.available')
-# def start_worker(kube_api, kube_dns):
 @when('kubernetes-worker.components.installed', 'kube-api-endpoint.available',
       'tls_client.ca.saved', 'tls_client.client.certificate.saved',
-      'tls_client.client.key.saved')
-def start_worker(kube_api):
+      'tls_client.client.key.saved', 'kube-dns.available')
+def start_worker(kube_api, kube_dns):
     ''' Start kubelet using the provided API and DNS info.'''
     servers = get_kube_api_servers(kube_api)
     # Note that the DNS server doesn't necessarily exist at this point. We know
@@ -169,18 +141,16 @@ def start_worker(kube_api):
     # kubelet with that info. This ensures that early pods are configured with
     # the correct DNS even though the server isn't ready yet.
 
-    # dns = kube_dns.details()
+    dns = kube_dns.details()
 
-    # if (data_changed('kube-api-servers', servers) or
-    #         data_changed('kube-dns', dns)):
-
-    if (data_changed('kube-api-servers', servers)):
+    if (data_changed('kube-api-servers', servers) or
+            data_changed('kube-dns', dns)):
         # Initialize a FlagManager object to add flags to unit data.
         opts = FlagManager('kubelet')
         # Append the DNS flags + data to the FlagManager object.
 
-        # opts.add('--cluster-dns', dns['sdn-ip'])
-        # opts.add('--cluster-domain', dns['domain'])
+        opts.add('--cluster-dns', dns['sdn-ip']) # FIXME: sdn-ip needs a rename
+        opts.add('--cluster-domain', dns['domain'])
 
         create_config(servers[0])
         render_init_scripts(servers)
@@ -203,6 +173,7 @@ def toggle_ingress_state():
     remove_state('kubernetes-worker.ingress.available')
 
 
+# TODO: do we need to do this for CNI?
 # @when('docker.sdn.configured')
 # def sdn_changed():
 #     '''The Software Defined Network changed on the container so restart the
@@ -212,9 +183,6 @@ def toggle_ingress_state():
 #     remove_state('docker.sdn.configured')
 
 
-# @when('kubernetes-worker.config.created', 'kube-dns.available')
-# @when_not('kubernetes-worker.ingress.available')
-# def render_and_launch_ingress(kube_dns):
 @when('kubernetes-worker.config.created')
 @when_not('kubernetes-worker.ingress.available')
 def render_and_launch_ingress():
