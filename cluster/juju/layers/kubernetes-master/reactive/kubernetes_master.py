@@ -26,6 +26,9 @@ from charmhelpers.core.templating import render
 from charmhelpers.fetch import apt_install
 
 
+# FIXME: this should be a charm config
+service_cluster_cidr = '10.152.183.0/24'
+
 dashboard_templates = [
     'kubernetes-dashboard.yaml',
     'influxdb-grafana-controller.yaml',
@@ -128,7 +131,7 @@ def setup_authentication():
 
     api_opts.add('--basic-auth-file', '/srv/kubernetes/basic_auth.csv')
     api_opts.add('--token-auth-file', '/srv/kubernetes/known_tokens.csv')
-    api_opts.add('--service-cluster-ip-range', '10.152.183.0/24') # FIXME: CIDR??
+    api_opts.add('--service-cluster-ip-range', service_cluster_cidr)
     hookenv.status_set('maintenance', 'Rendering authentication templates.')
     htaccess = '/srv/kubernetes/basic_auth.csv'
     if not os.path.isfile(htaccess):
@@ -249,7 +252,7 @@ def send_data(tls):
 
     # Get the SDN gateway based on the cidr address.
 
-    # sdn_ip = get_sdn_ip(sdn_cidr)
+    sdn_ip = get_sdn_ip()
 
     domain = hookenv.config('dns_domain')
     # Create SANs that the tls layer will add to the server cert.
@@ -257,7 +260,7 @@ def send_data(tls):
         hookenv.unit_public_ip(),
         hookenv.unit_private_ip(),
         socket.gethostname(),
-        # sdn_ip,
+        sdn_ip,
         'kubernetes',
         'kubernetes.{0}'.format(domain),
         'kubernetes.default',
@@ -553,12 +556,13 @@ def create_kubeconfig(kubeconfig, server, ca, key, certificate, user='ubuntu',
 #     return '.'.join(ip.split('.')[0:-1]) + '.10'
 
 
-# def get_sdn_ip(cidr):
-#     '''Get the IP address for the SDN gateway based on the provided cidr.'''
-#     # Remove the range from the cidr.
-#     ip = cidr.split('/')[0]
-#     # Remove the last octet and replace it with 1.
-#     return '.'.join(ip.split('.')[0:-1]) + '.1'
+# FIXME: this needs a rename
+def get_sdn_ip():
+    '''Get the IP address for the SDN gateway based on the provided cidr.'''
+    # Remove the range from the cidr.
+    ip = service_cluster_cidr.split('/')[0]
+    # Remove the last octet and replace it with 1.
+    return '.'.join(ip.split('.')[0:-1]) + '.1'
 
 
 def handle_etcd_relation(reldata):
