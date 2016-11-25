@@ -160,10 +160,9 @@ def start_worker(kube_api, kube_dns, cni):
 
 
 @when('cni.connected')
-@when_not('kubernetes-worker.cni.configured')
+@when_not('cni.configured')
 def configure_cni(cni):
     cni.set_config(is_master=False, kubeconfig_path=kubeconfig_path)
-    set_state('kubernetes-worker.cni.configured')
 
 
 @when('config.changed.ingress')

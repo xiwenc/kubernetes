@@ -104,10 +104,9 @@ def install():
 
 
 @when('cni.connected')
-@when_not('kubernetes-master.cni.configured')
+@when_not('cni.configured')
 def configure_cni(cni):
     cni.set_config(is_master=True, kubeconfig_path='')
-    set_state('kubernetes-master.cni.configured')
 
 
 @when('kubernetes-master.components.installed')
