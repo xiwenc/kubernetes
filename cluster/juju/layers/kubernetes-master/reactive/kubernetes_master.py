@@ -37,6 +37,7 @@ dashboard_templates = [
 
 
 def service_cidr():
+    ''' Return the charm's service-cidr config '''
     return hookenv.config('service-cidr')
 
 
