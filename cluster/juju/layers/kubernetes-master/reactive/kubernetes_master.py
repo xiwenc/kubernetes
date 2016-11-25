@@ -26,9 +26,6 @@ from charmhelpers.core.templating import render
 from charmhelpers.fetch import apt_install
 
 
-# FIXME: this should be a charm config
-service_cluster_cidr = '10.152.183.0/24'
-
 dashboard_templates = [
     'kubernetes-dashboard.yaml',
     'influxdb-grafana-controller.yaml',
@@ -37,6 +34,10 @@ dashboard_templates = [
     'heapster-controller.yaml',
     'heapster-service.yaml'
 ]
+
+
+def service_cidr():
+    return hookenv.config('service-cidr')
 
 
 @hook('upgrade-charm')
@@ -118,7 +119,7 @@ def setup_authentication():
 
     api_opts.add('--basic-auth-file', '/srv/kubernetes/basic_auth.csv')
     api_opts.add('--token-auth-file', '/srv/kubernetes/known_tokens.csv')
-    api_opts.add('--service-cluster-ip-range', service_cluster_cidr)
+    api_opts.add('--service-cluster-ip-range', service_cidr())
     hookenv.status_set('maintenance', 'Rendering authentication templates.')
     htaccess = '/srv/kubernetes/basic_auth.csv'
     if not os.path.isfile(htaccess):
@@ -493,7 +494,7 @@ def create_kubeconfig(kubeconfig, server, ca, key, certificate, user='ubuntu',
 def get_dns_ip():
     '''Get an IP address for the DNS server on the provided cidr.'''
     # Remove the range from the cidr.
-    ip = service_cluster_cidr.split('/')[0]
+    ip = service_cidr().split('/')[0]
     # Take the last octet off the IP address and replace it with 10.
     return '.'.join(ip.split('.')[0:-1]) + '.10'
 
@@ -501,7 +502,7 @@ def get_dns_ip():
 def get_kubernetes_service_ip():
     '''Get the IP address for the kubernetes service based on the cidr.'''
     # Remove the range from the cidr.
-    ip = service_cluster_cidr.split('/')[0]
+    ip = service_cidr().split('/')[0]
     # Remove the last octet and replace it with 1.
     return '.'.join(ip.split('.')[0:-1]) + '.1'
 
