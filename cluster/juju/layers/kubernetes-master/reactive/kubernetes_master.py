@@ -91,7 +91,6 @@ def install():
         {'name': 'kube-controller-manager', 'path': '/usr/local/bin'},
         {'name': 'kube-scheduler', 'path': '/usr/local/bin'},
         {'name': 'kubectl', 'path': '/usr/local/bin'},
-        {'name': 'loopback', 'path': '/opt/cni/bin'},
     ]
 
     for app in apps:
