@@ -173,14 +173,13 @@ def toggle_ingress_state():
     remove_state('kubernetes-worker.ingress.available')
 
 
-# TODO: do we need to do this for CNI?
-# @when('docker.sdn.configured')
-# def sdn_changed():
-#     '''The Software Defined Network changed on the container so restart the
-#     kubernetes services.'''
-#     restart_unit_services()
-#     update_kubelet_status()
-#     remove_state('docker.sdn.configured')
+@when('docker.sdn.configured')
+def sdn_changed():
+    '''The Software Defined Network changed on the container so restart the
+    kubernetes services.'''
+    restart_unit_services()
+    update_kubelet_status()
+    remove_state('docker.sdn.configured')
 
 
 @when('kubernetes-worker.config.created')
