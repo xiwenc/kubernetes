@@ -132,8 +132,8 @@ def update_kubelet_status():
 
 @when('kubernetes-worker.components.installed', 'kube-api-endpoint.available',
       'tls_client.ca.saved', 'tls_client.client.certificate.saved',
-      'tls_client.client.key.saved', 'kube-dns.available')
-def start_worker(kube_api, kube_dns):
+      'tls_client.client.key.saved', 'kube-dns.available', 'cni.available')
+def start_worker(kube_api, kube_dns, cni):
     ''' Start kubelet using the provided API and DNS info.'''
     servers = get_kube_api_servers(kube_api)
     # Note that the DNS server doesn't necessarily exist at this point. We know
