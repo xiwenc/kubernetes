@@ -22,6 +22,7 @@ requires:
 provides:
   cni:
     interface: kubernetes-cni
+    scope: container
 resources:
   kubernetes:
     type: file

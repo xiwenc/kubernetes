@@ -23,6 +23,7 @@ provides:
     interface: kube-dns
   cni:
     interface: kubernetes-cni
+    scope: container
 requires:
   etcd:
     interface: etcd
