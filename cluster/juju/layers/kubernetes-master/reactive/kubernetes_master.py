@@ -99,19 +99,6 @@ def install():
         hookenv.log(install)
         check_call(install)
 
-    # dest_dir = '/usr/local/bin/'
-    # # Create a list of components to install.
-    # services = ['kube-apiserver',
-    #             'kube-controller-manager',
-    #             'kube-scheduler',
-    #             'kubectl']
-    # for service in services:
-    #     # Install each one of the service binaries in /usr/local/bin.
-    #     install = 'install -v {0}/{1} {2}'.format(files_dir, service, dest_dir)
-    #     return_code = call(split(install))
-    #     if return_code != 0:
-    #         raise Exception('Unable to install {0}'.format(service))
-
     set_state('kubernetes-master.components.installed')
 
 
@@ -214,7 +201,7 @@ def send_data(tls):
     common_name = hookenv.unit_public_ip()
 
     # Get the SDN gateway based on the cidr address.
-    sdn_ip = get_sdn_ip()
+    kubernetes_service_ip = get_kubernetes_service_ip()
 
     domain = hookenv.config('dns_domain')
     # Create SANs that the tls layer will add to the server cert.
@@ -222,7 +209,7 @@ def send_data(tls):
         hookenv.unit_public_ip(),
         hookenv.unit_private_ip(),
         socket.gethostname(),
-        sdn_ip,
+        kubernetes_service_ip,
         'kubernetes',
         'kubernetes.{0}'.format(domain),
         'kubernetes.default',
@@ -511,9 +498,8 @@ def get_dns_ip():
     return '.'.join(ip.split('.')[0:-1]) + '.10'
 
 
-# FIXME: this needs a rename
-def get_sdn_ip():
-    '''Get the IP address for the SDN gateway based on the provided cidr.'''
+def get_kubernetes_service_ip():
+    '''Get the IP address for the kubernetes service based on the cidr.'''
     # Remove the range from the cidr.
     ip = service_cluster_cidr.split('/')[0]
     # Remove the last octet and replace it with 1.
