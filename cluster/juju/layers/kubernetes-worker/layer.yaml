@@ -3,6 +3,7 @@ includes:
   - 'layer:basic'
   - 'layer:docker'
   - 'layer:tls-client'
+  - 'layer:debug'
   - 'interface:http'
   - 'interface:kubernetes-cni'
   - 'interface:kube-dns'
@@ -11,6 +12,7 @@ options:
     packages:
       - 'nfs-common'
       - 'ceph-common'
+      - 'socat'
   tls-client:
     ca_certificate_path: '/srv/kubernetes/ca.crt'
     server_certificate_path: '/srv/kubernetes/server.crt'

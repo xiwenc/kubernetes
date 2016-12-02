@@ -221,8 +221,12 @@ def apply_node_labels():
     user_labels = _parse_labels(config.get('labels'))
 
     # For diffing sake, iterate the previous label set
-    previous_labels = _parse_labels(config.previous('labels'))
-    hookenv.log('previous labels: {}'.format(previous_labels))
+    if config.previous('labels'):
+        previous_labels = _parse_labels(config.previous('labels'))
+        hookenv.log('previous labels: {}'.format(previous_labels))
+    else:
+        # this handles first time run if there is no previous labels config
+        previous_labels = _parse_labels("")
 
     # Calculate label removal
     for label in previous_labels:
