@@ -22,6 +22,7 @@ from charms.kubernetes.flagmanager import FlagManager
 
 from charmhelpers.core import hookenv
 from charmhelpers.core import host
+from charmhelpers.core import unitdata
 from charmhelpers.core.templating import render
 from charmhelpers.fetch import apt_install
 
@@ -39,7 +40,16 @@ dashboard_templates = [
 
 def service_cidr():
     ''' Return the charm's service-cidr config '''
-    return hookenv.config('service-cidr')
+    db = unitdata.kv()
+    frozen_cidr = db.get('kubernetes-master.service-cidr')
+    return frozen_cidr or hookenv.config('service-cidr')
+
+
+def freeze_service_cidr():
+    ''' Freeze the service CIDR. Once the apiserver has started, we can no
+    longer safely change this value. '''
+    db = unitdata.kv()
+    db.set('kubernetes-master.service-cidr', service_cidr())
 
 
 @hook('upgrade-charm')
@@ -154,9 +164,12 @@ def set_app_version():
 
 
 @when('kube-dns.available', 'kubernetes-master.components.installed')
-def ready_messaging():
+def idle_status():
     ''' Signal at the end of the run that we are running. '''
-    hookenv.status_set('active', 'Kubernetes master running.')
+    if hookenv.config('service-cidr') != service_cidr():
+        hookenv.status_set('active', 'WARN: cannot change service-cidr, still using ' + service_cidr())
+    else:
+        hookenv.status_set('active', 'Kubernetes master running.')
 
 
 @when('etcd.available', 'kubernetes-master.components.installed',
@@ -166,6 +179,7 @@ def start_master(etcd, tls):
     '''Run the Kubernetes master components.'''
     hookenv.status_set('maintenance',
                        'Rendering the Kubernetes master systemd files.')
+    freeze_service_cidr()
     handle_etcd_relation(etcd)
     # Use the etcd relation object to render files with etcd information.
     render_files()
