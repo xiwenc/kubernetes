@@ -109,6 +109,8 @@ def install():
 @when('cni.connected')
 @when_not('cni.configured')
 def configure_cni(cni):
+    ''' Set master configuration on the CNI relation. This lets the CNI
+    subordinate know that we're the master so it can respond accordingly. '''
     cni.set_config(is_master=True, kubeconfig_path='')
 
 
