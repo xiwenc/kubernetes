@@ -1,8 +1,10 @@
 #!/bin/sh
 set -ux
 
-systemctl status kubelet > $DEBUG_SCRIPT_DIR/kubelet-systemctl-status
-journalctl -u kubelet > $DEBUG_SCRIPT_DIR/kubelet-journal
+for service in kubelet kube-proxy; do
+  systemctl status $service > $DEBUG_SCRIPT_DIR/$service-systemctl-status
+  journalctl -u $service > $DEBUG_SCRIPT_DIR/$service-journal
+done
 
 mkdir -p $DEBUG_SCRIPT_DIR/etc-default
 cp /etc/default/kube* $DEBUG_SCRIPT_DIR/etc-default
