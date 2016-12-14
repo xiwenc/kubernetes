@@ -61,8 +61,8 @@ def update_addons(dest):
     with kubernetes_repo() as repo:
         add_addon(repo + "/cluster/addons/dashboard/dashboard-controller.yaml", dest)
         add_addon(repo + "/cluster/addons/dashboard/dashboard-service.yaml", dest)
-        add_addon(repo + "/cluster/addons/dns/skydns-rc.yaml.in", dest + "/kubedns-rc.yaml")
-        add_addon(repo + "/cluster/addons/dns/skydns-svc.yaml.in", dest + "/kubedns-svc.yaml")
+        add_addon(repo + "/cluster/addons/dns/kubedns-controller.yaml.in", dest + "/kubedns-controller.yaml")
+        add_addon(repo + "/cluster/addons/dns/kubedns-svc.yaml.in", dest + "/kubedns-svc.yaml")
         add_addon(repo + "/cluster/addons/cluster-monitoring/influxdb/grafana-service.yaml", dest)
         add_addon(repo + "/cluster/addons/cluster-monitoring/influxdb/heapster-controller.yaml", dest)
         add_addon(repo + "/cluster/addons/cluster-monitoring/influxdb/heapster-service.yaml", dest)
