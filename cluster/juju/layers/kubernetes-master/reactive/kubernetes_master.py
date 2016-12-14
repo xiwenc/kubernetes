@@ -309,7 +309,7 @@ def start_kube_dns():
             'dns_domain': hookenv.config('dns_domain')
         }
     }
-    create_addon('kubedns-rc.yaml', context)
+    create_addon('kubedns-controller.yaml', context)
     create_addon('kubedns-svc.yaml', context)
     set_state('kube-dns.available')
 
