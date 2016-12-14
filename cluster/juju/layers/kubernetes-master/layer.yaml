@@ -5,7 +5,7 @@ includes:
   - 'layer:debug'
   - 'interface:etcd'
   - 'interface:http'
-  - 'interface:sdn-plugin'
+  - 'interface:kubernetes-cni'
   - 'interface:kube-dns'
   - 'interface:ceph-admin'
   - 'interface:public-address'

@@ -7,3 +7,7 @@ options:
     type: string
     default: cluster.local
     description: The local domain for cluster dns
+  service-cidr:
+    type: string
+    default: 10.152.183.0/24
+    description: CIDR to user for Kubernetes services. Cannot be changed after deployment.

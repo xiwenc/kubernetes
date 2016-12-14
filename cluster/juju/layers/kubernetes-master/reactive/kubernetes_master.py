@@ -22,6 +22,7 @@ from charms.kubernetes.flagmanager import FlagManager
 
 from charmhelpers.core import hookenv
 from charmhelpers.core import host
+from charmhelpers.core import unitdata
 from charmhelpers.core.templating import render
 from charmhelpers.fetch import apt_install
 
@@ -35,6 +36,20 @@ dashboard_templates = [
     'heapster-controller.yaml',
     'heapster-service.yaml'
 ]
+
+
+def service_cidr():
+    ''' Return the charm's service-cidr config '''
+    db = unitdata.kv()
+    frozen_cidr = db.get('kubernetes-master.service-cidr')
+    return frozen_cidr or hookenv.config('service-cidr')
+
+
+def freeze_service_cidr():
+    ''' Freeze the service CIDR. Once the apiserver has started, we can no
+    longer safely change this value. '''
+    db = unitdata.kv()
+    db.set('kubernetes-master.service-cidr', service_cidr())
 
 
 @hook('upgrade-charm')
@@ -83,20 +98,30 @@ def install():
     command = 'tar -xvzf {0} -C {1}'.format(archive, files_dir)
     hookenv.log(command)
     check_call(split(command))
-    dest_dir = '/usr/local/bin/'
-    # Create a list of components to install.
-    services = ['kube-apiserver',
-                'kube-controller-manager',
-                'kube-scheduler',
-                'kubectl']
-    for service in services:
-        # Install each one of the service binaries in /usr/local/bin.
-        install = 'install -v {0}/{1} {2}'.format(files_dir, service, dest_dir)
-        return_code = call(split(install))
-        if return_code != 0:
-            raise Exception('Unable to install {0}'.format(service))
+
+    apps = [
+        {'name': 'kube-apiserver', 'path': '/usr/local/bin'},
+        {'name': 'kube-controller-manager', 'path': '/usr/local/bin'},
+        {'name': 'kube-scheduler', 'path': '/usr/local/bin'},
+        {'name': 'kubectl', 'path': '/usr/local/bin'},
+    ]
+
+    for app in apps:
+        unpacked = '{}/{}'.format(files_dir, app['name'])
+        app_path = os.path.join(app['path'], app['name'])
+        install = ['install', '-v', '-D', unpacked, app_path]
+        hookenv.log(install)
+        check_call(install)
 
     set_state('kubernetes-master.components.installed')
+
+
+@when('cni.connected')
+@when_not('cni.configured')
+def configure_cni(cni):
+    ''' Set master configuration on the CNI relation. This lets the CNI
+    subordinate know that we're the master so it can respond accordingly. '''
+    cni.set_config(is_master=True, kubeconfig_path='')
 
 
 @when('kubernetes-master.components.installed')
@@ -108,6 +133,7 @@ def setup_authentication():
 
     api_opts.add('--basic-auth-file', '/srv/kubernetes/basic_auth.csv')
     api_opts.add('--token-auth-file', '/srv/kubernetes/known_tokens.csv')
+    api_opts.add('--service-cluster-ip-range', service_cidr())
     hookenv.status_set('maintenance', 'Rendering authentication templates.')
     htaccess = '/srv/kubernetes/basic_auth.csv'
     if not os.path.isfile(htaccess):
@@ -137,20 +163,23 @@ def set_app_version():
     hookenv.application_version_set(version.split(b' v')[-1].rstrip())
 
 
-@when('kube-dns.available', 'kube-sdn.configured',
-      'kubernetes-master.components.installed')
-def ready_messaging():
+@when('kube-dns.available', 'kubernetes-master.components.installed')
+def idle_status():
     ''' Signal at the end of the run that we are running. '''
-    hookenv.status_set('active', 'Kubernetes master running.')
+    if hookenv.config('service-cidr') != service_cidr():
+        hookenv.status_set('active', 'WARN: cannot change service-cidr, still using ' + service_cidr())
+    else:
+        hookenv.status_set('active', 'Kubernetes master running.')
 
 
 @when('etcd.available', 'kubernetes-master.components.installed',
-      'kube-sdn.configured', 'certificates.server.cert.available')
+      'certificates.server.cert.available')
 @when_not('kubernetes-master.components.started')
 def start_master(etcd, tls):
     '''Run the Kubernetes master components.'''
     hookenv.status_set('maintenance',
                        'Rendering the Kubernetes master systemd files.')
+    freeze_service_cidr()
     handle_etcd_relation(etcd)
     # Use the etcd relation object to render files with etcd information.
     render_files()
@@ -167,13 +196,12 @@ def start_master(etcd, tls):
     set_state('kubernetes-master.components.started')
 
 
-@when('cluster-dns.connected', 'sdn-plugin.available')
-def send_cluster_dns_detail(cluster_dns, sdn_plugin):
+@when('cluster-dns.connected')
+def send_cluster_dns_detail(cluster_dns):
     ''' Send cluster DNS info '''
     # Note that the DNS server doesn't necessarily exist at this point. We know
     # where we're going to put it, though, so let's send the info anyway.
-    details = sdn_plugin.get_sdn_config()
-    dns_ip = get_dns_ip(details['cidr'])
+    dns_ip = get_dns_ip()
     cluster_dns.set_dns_info(53, hookenv.config('dns_domain'), dns_ip)
 
 
@@ -184,23 +212,23 @@ def push_service_data(kube_api):
     kube_api.configure(port=6443)
 
 
-@when('certificates.available', 'sdn-plugin.available')
-def send_data(tls, sdn_plugin):
+@when('certificates.available')
+def send_data(tls):
     '''Send the data that is required to create a server certificate for
     this server.'''
     # Use the public ip of this unit as the Common Name for the certificate.
     common_name = hookenv.unit_public_ip()
-    # Get the SDN cidr from the relation object.
-    sdn_cidr = sdn_plugin.get_sdn_config().get('cidr')
+
     # Get the SDN gateway based on the cidr address.
-    sdn_ip = get_sdn_ip(sdn_cidr)
+    kubernetes_service_ip = get_kubernetes_service_ip()
+
     domain = hookenv.config('dns_domain')
     # Create SANs that the tls layer will add to the server cert.
     sans = [
         hookenv.unit_public_ip(),
         hookenv.unit_private_ip(),
         socket.gethostname(),
-        sdn_ip,
+        kubernetes_service_ip,
         'kubernetes',
         'kubernetes.{0}'.format(domain),
         'kubernetes.default',
@@ -222,18 +250,7 @@ def push_api_data(kube_api):
     kube_api.set_api_port('6443')
 
 
-@when('kubernetes-master.components.installed', 'sdn-plugin.available')
-def gather_sdn_data(sdn_plugin):
-    sdn_data = sdn_plugin.get_sdn_config()
-    if not sdn_data['cidr'] or not sdn_data['subnet'] or not sdn_data['mtu']:
-        hookenv.status_set('waiting', 'Waiting on SDN configuration.')
-        return
-    api_opts = FlagManager('kube-apiserver')
-    api_opts.add('--service-cluster-ip-range', sdn_data['cidr'])
-    set_state('kube-sdn.configured')
-
-
-@when('kubernetes-master.components.started', 'kube-dns.available')
+@when('kubernetes-master.components.started')
 @when_not('kubernetes.dashboard.available')
 def install_dashboard_addons():
     ''' Launch dashboard addons if they are enabled in config '''
@@ -241,10 +258,13 @@ def install_dashboard_addons():
         hookenv.log('Launching kubernetes dashboard.')
         context = {}
         context['arch'] = arch()
-        context['pillar'] = {'num_nodes': get_node_count()}
-        for template in dashboard_templates:
-            create_addon(template, context)
-        set_state('kubernetes.dashboard.available')
+        try:
+            context['pillar'] = {'num_nodes': get_node_count()}
+            for template in dashboard_templates:
+                create_addon(template, context)
+            set_state('kubernetes.dashboard.available')
+        except CalledProcessError:
+            hookenv.log('Kubernetes dashboard waiting on kubeapi')
 
 
 @when('kubernetes-master.components.started', 'kubernetes.dashboard.available')
@@ -257,10 +277,9 @@ def remove_dashboard_addons():
         remove_state('kubernetes.dashboard.available')
 
 
-@when('kubernetes-master.components.installed', 'kube-sdn.configured',
-      'sdn-plugin.available')
+@when('kubernetes-master.components.installed')
 @when_not('kube-dns.available')
-def start_kube_dns(sdn_plugin):
+def start_kube_dns():
     ''' State guard to starting DNS '''
 
     # Interrogate the cluster to find out if we have at least one worker
@@ -281,8 +300,15 @@ def start_kube_dns(sdn_plugin):
     hookenv.log(message)
     hookenv.status_set('maintenance', message)
 
-    context = prepare_sdn_context(sdn_plugin)
-    context['arch'] = arch()
+    context = {
+        'arch': arch(),
+        # The dictionary named 'pillar' is a construct of the k8s template files.
+        'pillar': {
+            'dns_server': get_dns_ip(),
+            'dns_replicas': 1,
+            'dns_domain': hookenv.config('dns_domain')
+        }
+    }
     create_addon('kubedns-rc.yaml', context)
     create_addon('kubedns-svc.yaml', context)
     set_state('kube-dns.available')
@@ -484,18 +510,18 @@ def create_kubeconfig(kubeconfig, server, ca, key, certificate, user='ubuntu',
     check_call(split(cmd.format(kubeconfig, context)))
 
 
-def get_dns_ip(cidr):
+def get_dns_ip():
     '''Get an IP address for the DNS server on the provided cidr.'''
     # Remove the range from the cidr.
-    ip = cidr.split('/')[0]
+    ip = service_cidr().split('/')[0]
     # Take the last octet off the IP address and replace it with 10.
     return '.'.join(ip.split('.')[0:-1]) + '.10'
 
 
-def get_sdn_ip(cidr):
-    '''Get the IP address for the SDN gateway based on the provided cidr.'''
+def get_kubernetes_service_ip():
+    '''Get the IP address for the kubernetes service based on the cidr.'''
     # Remove the range from the cidr.
-    ip = cidr.split('/')[0]
+    ip = service_cidr().split('/')[0]
     # Remove the last octet and replace it with 1.
     return '.'.join(ip.split('.')[0:-1]) + '.1'
 
@@ -531,27 +557,6 @@ def handle_etcd_relation(reldata):
     api_opts.add('--etcd-keyfile', key)
     api_opts.add('--etcd-certfile', cert)
     api_opts.add('--etcd-servers', connection_string, strict=True)
-
-
-def prepare_sdn_context(sdn_plugin=None):
-    '''Get the Software Defined Network (SDN) information and return it as a
-    dictionary. '''
-    sdn_data = {}
-    # The dictionary named 'pillar' is a construct of the k8s template files.
-    pillar = {}
-    # SDN Providers pass data via the sdn-plugin interface
-    # Ideally the DNS address should come from the sdn cidr.
-    plugin_data = sdn_plugin.get_sdn_config()
-    if plugin_data.get('cidr'):
-        # Generate the DNS ip address on the SDN cidr (this is desired).
-        pillar['dns_server'] = get_dns_ip(plugin_data['cidr'])
-    # The pillar['dns_server'] value is used the kubedns-svc.yaml file.
-    pillar['dns_replicas'] = 1
-    # The pillar['dns_domain'] value is used in the kubedns-rc.yaml
-    pillar['dns_domain'] = hookenv.config('dns_domain')
-    # Use a 'pillar' dictionary so we can reuse the upstream kubedns templates.
-    sdn_data['pillar'] = pillar
-    return sdn_data
 
 
 def render_files():

@@ -13,7 +13,7 @@ tags:
   - infrastructure
 subordinate: false
 requires:
-   etcd:
-     interface: etcd
-series: 
+  etcd:
+    interface: etcd
+series:
   - xenial

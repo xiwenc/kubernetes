@@ -19,11 +19,11 @@ series:
 provides:
   kube-api-endpoint:
     interface: http
-  sdn-plugin:
-    interface: sdn-plugin
-    scope: container
   cluster-dns:
     interface: kube-dns
+  cni:
+    interface: kubernetes-cni
+    scope: container
 requires:
   etcd:
     interface: etcd

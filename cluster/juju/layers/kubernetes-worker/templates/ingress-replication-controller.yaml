@@ -15,6 +15,9 @@ spec:
         name: nginx-ingress-lb
     spec:
       terminationGracePeriodSeconds: 60
+      # hostPort doesn't work with CNI, so we have to use hostNetwork instead
+      # see https://github.com/kubernetes/kubernetes/issues/23920
+      hostNetwork: true
       containers:
       - image: gcr.io/google_containers/nginx-ingress-controller:0.8.3
         name: nginx-ingress-lb
@@ -38,9 +41,7 @@ spec:
                 fieldPath: metadata.namespace
         ports:
         - containerPort: 80
-          hostPort: 80
         - containerPort: 443
-          hostPort: 443
         args:
         - /nginx-ingress-controller
         - --default-backend-service=$(POD_NAMESPACE)/default-http-backend

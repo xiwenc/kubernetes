@@ -17,6 +17,9 @@ from charmhelpers.core import hookenv
 from charmhelpers.core.host import service_stop
 
 
+kubeconfig_path = '/srv/kubernetes/config'
+
+
 @hook('upgrade-charm')
 def remove_installed_state():
     remove_state('kubernetes-worker.components.installed')
@@ -70,13 +73,19 @@ def install_kubernetes_components():
     hookenv.log(cmd)
     check_call(cmd)
 
-    services = ['kubelet', 'kube-proxy', 'kubectl']
+    apps = [
+        {'name': 'kubelet', 'path': '/usr/local/bin'},
+        {'name': 'kube-proxy', 'path': '/usr/local/bin'},
+        {'name': 'kubectl', 'path': '/usr/local/bin'},
+        {'name': 'loopback', 'path': '/opt/cni/bin'}
+    ]
 
-    for service in services:
-        unpacked = '{}/{}'.format(unpack_path, service)
-        app_path = '/usr/local/bin/{}'.format(service)
-        install = ['install', '-v', unpacked, app_path]
-        call(install)
+    for app in apps:
+        unpacked = '{}/{}'.format(unpack_path, app['name'])
+        app_path = os.path.join(app['path'], app['name'])
+        install = ['install', '-v', '-D', unpacked, app_path]
+        hookenv.log(install)
+        check_call(install)
 
     set_state('kubernetes-worker.components.installed')
 
@@ -101,8 +110,7 @@ def notify_user_transient_status():
     # to self host the dns pod, and configure itself to query the dns service
     # declared in the kube-system namespace
 
-    hookenv.status_set('waiting',
-                       'Waiting for cluster-manager to initiate start.')
+    hookenv.status_set('waiting', 'Waiting for cluster DNS.')
 
 
 @when('kubernetes-worker.components.installed', 'kube-dns.available')
@@ -115,16 +123,7 @@ def update_kubelet_status():
     ''' There are different states that the kubelt can be in, where we are
     waiting for dns, waiting for cluster turnup, or ready to serve
     applications.'''
-    # Daemon options are managed by the FlagManager class
-    kubelet_opts = FlagManager('kubelet')
-
-    # Query the FlagManager dict for the dns option, and determine if
-    # kubelet is running
-    if (_systemctl_is_active('kubelet') and
-       '--cluster-dns' not in kubelet_opts.data):
-        hookenv.status_set('waiting', 'Waiting for cluster DNS.')
-    elif (_systemctl_is_active('kubelet') and
-          '--cluster-dns' in kubelet_opts.data):
+    if (_systemctl_is_active('kubelet')):
         hookenv.status_set('active', 'Kubernetes worker running.')
     # if kubelet is not running, we're waiting on something else to converge
     elif (not _systemctl_is_active('kubelet')):
@@ -133,27 +132,39 @@ def update_kubelet_status():
 
 @when('kubernetes-worker.components.installed', 'kube-api-endpoint.available',
       'tls_client.ca.saved', 'tls_client.client.certificate.saved',
-      'tls_client.client.key.saved', 'kube-dns.available')
-def start_worker(kube_api, kube_dns):
+      'tls_client.client.key.saved', 'kube-dns.available', 'cni.available')
+def start_worker(kube_api, kube_dns, cni):
     ''' Start kubelet using the provided API and DNS info.'''
     servers = get_kube_api_servers(kube_api)
     # Note that the DNS server doesn't necessarily exist at this point. We know
     # what its IP will eventually be, though, so we can go ahead and configure
     # kubelet with that info. This ensures that early pods are configured with
     # the correct DNS even though the server isn't ready yet.
+
     dns = kube_dns.details()
+
     if (data_changed('kube-api-servers', servers) or
             data_changed('kube-dns', dns)):
         # Initialize a FlagManager object to add flags to unit data.
         opts = FlagManager('kubelet')
         # Append the DNS flags + data to the FlagManager object.
-        opts.add('--cluster-dns', dns['sdn-ip'])
+
+        opts.add('--cluster-dns', dns['sdn-ip']) # FIXME: sdn-ip needs a rename
         opts.add('--cluster-domain', dns['domain'])
+
         create_config(servers[0])
         render_init_scripts(servers)
         set_state('kubernetes-worker.config.created')
         restart_unit_services()
         update_kubelet_status()
+
+
+@when('cni.connected')
+@when_not('cni.configured')
+def configure_cni(cni):
+    ''' Set worker configuration on the CNI relation. This lets the CNI
+    subordinate know that we're the worker so it can respond accordingly. '''
+    cni.set_config(is_master=False, kubeconfig_path=kubeconfig_path)
 
 
 @when('config.changed.ingress')
@@ -172,9 +183,9 @@ def sdn_changed():
     remove_state('docker.sdn.configured')
 
 
-@when('kubernetes-worker.config.created', 'kube-dns.available')
+@when('kubernetes-worker.config.created')
 @when_not('kubernetes-worker.ingress.available')
-def render_and_launch_ingress(kube_dns):
+def render_and_launch_ingress():
     ''' If configuration has ingress RC enabled, launch the ingress load
     balancer and default http backend. Otherwise attempt deletion. '''
     config = hookenv.config()
@@ -264,7 +275,7 @@ def create_config(server):
     create_kubeconfig('/root/.kube/config', server, ca, key, cert,
                       user='root')
     # Create kubernetes configuration for kubelet, and kube-proxy services.
-    create_kubeconfig('/srv/kubernetes/config', server, ca, key, cert,
+    create_kubeconfig(kubeconfig_path, server, ca, key, cert,
                       user='kubelet')
 
 
@@ -288,11 +299,12 @@ def render_init_scripts(api_servers):
     kubelet_opts = FlagManager('kubelet')
     # Declare to kubelet it needs to read from kubeconfig
     kubelet_opts.add('--require-kubeconfig', None)
-    kubelet_opts.add('--kubeconfig', '/srv/kubernetes/config')
+    kubelet_opts.add('--kubeconfig', kubeconfig_path)
+    kubelet_opts.add('--network-plugin', 'cni')
     context['kubelet_opts'] = kubelet_opts.to_s()
     # Create a flag manager for kube-proxy to render kube_proxy_opts.
     kube_proxy_opts = FlagManager('kube-proxy')
-    kube_proxy_opts.add('--kubeconfig', '/srv/kubernetes/config')
+    kube_proxy_opts.add('--kubeconfig', kubeconfig_path)
     context['kube_proxy_opts'] = kube_proxy_opts.to_s()
 
     os.makedirs('/var/lib/kubelet', exist_ok=True)
@@ -382,7 +394,7 @@ def get_kube_api_servers(kube_api):
 def kubectl(*args):
     ''' Run a kubectl cli command with a config file. Returns stdout and throws
     an error if the command fails. '''
-    command = ['kubectl', '--kubeconfig=/srv/kubernetes/config'] + list(args)
+    command = ['kubectl', '--kubeconfig=' + kubeconfig_path] + list(args)
     hookenv.log('Executing {}'.format(command))
     return check_output(command)
 
@@ -434,14 +446,14 @@ def _apply_node_label(label, delete=False):
 
     hostname = gethostname()
     # TODO: Make this part of the kubectl calls instead of a special string
-    cmd_base = 'kubectl --kubeconfig=/srv/kubernetes/config label node {0} {1}'
+    cmd_base = 'kubectl --kubeconfig={0} label node {1} {2}'
 
     if delete is True:
         label_key = label.split('=')[0]
-        cmd = cmd_base.format(hostname, label_key)
+        cmd = cmd_base.format(kubeconfig_path, hostname, label_key)
         cmd = cmd + '-'
     else:
-        cmd = cmd_base.format(hostname, label)
+        cmd = cmd_base.format(kubeconfig_path, hostname, label)
     check_call(split(cmd))
 
 

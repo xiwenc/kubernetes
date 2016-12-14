@@ -19,6 +19,10 @@ requires:
     interface: http
   kube-dns:
     interface: kube-dns
+provides:
+  cni:
+    interface: kubernetes-cni
+    scope: container
 resources:
   kubernetes:
     type: file
