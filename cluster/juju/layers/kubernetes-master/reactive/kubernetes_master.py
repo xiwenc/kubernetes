@@ -250,7 +250,7 @@ def push_api_data(kube_api):
     kube_api.set_api_port('6443')
 
 
-@when('kubernetes-master.components.started')
+@when('kubernetes-master.components.started', 'kube-dns.available')
 @when_not('kubernetes.dashboard.available')
 def install_dashboard_addons():
     ''' Launch dashboard addons if they are enabled in config '''
