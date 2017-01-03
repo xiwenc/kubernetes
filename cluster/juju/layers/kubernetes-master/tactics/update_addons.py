@@ -89,7 +89,7 @@ class UpdateAddonsTactic(Tactic):
     template/addons folder at `charm build` time. """
 
     @classmethod
-    def trigger(cls, entity, target, layer, next_config):
+    def trigger(cls, entity, target=None, layer=None, next_config=None):
         """ Determines which files the tactic should apply to. We only want
         this tactic to trigger once, so let's use the templates/ folder
         """
