@@ -1,14 +1,5 @@
 #!/usr/bin/python2
 
-description = """
-Update addon manifests for the charm.
-
-This will clone the kubernetes repo and place the addons in
-<charm>/templates/addons.
-
-Can be run with no arguments and from any folder.
-"""
-
 import argparse
 import os
 import shutil
@@ -19,9 +10,21 @@ from contextlib import contextmanager
 import charmtools.utils
 from charmtools.build.tactics import Tactic
 
+
+description = """
+Update addon manifests for the charm.
+
+This will clone the kubernetes repo and place the addons in
+<charm>/templates/addons.
+
+Can be run with no arguments and from any folder.
+"""
+
+
 def sh(cmd):
     """ Alias for subprocess calls """
     subprocess.check_call(cmd.split())
+
 
 def clean_addon_dir(addon_dir):
     """ Remove and recreate the addons folder """
@@ -29,16 +32,19 @@ def clean_addon_dir(addon_dir):
     shutil.rmtree(addon_dir, ignore_errors=True)
     os.makedirs(addon_dir)
 
+
 @contextmanager
 def kubernetes_repo():
     """ Shallow clone kubernetes repo and clean up when we are done """
-    print("Cloning https://github.com/kubernetes/kubernetes.git")
+    repo = "https://github.com/kubernetes/kubernetes.git"
+    print("Cloning " + repo)
     path = tempfile.mkdtemp(prefix="kubernetes")
     try:
-        sh("git clone --depth 1 https://github.com/kubernetes/kubernetes.git " + path)
+        sh("git clone --depth 1 {0} {1}".format(repo, path))
         yield path
     finally:
         shutil.rmtree(path)
+
 
 def add_addon(source, dest):
     """ Add an addon manifest from the given source.
@@ -54,32 +60,40 @@ def add_addon(source, dest):
     with open(dest, "w") as f:
         f.write(content)
 
+
 def update_addons(dest):
     """ Update addons. This will clean the addons folder and add new manifests
     from upstream. """
     clean_addon_dir(dest)
     with kubernetes_repo() as repo:
-        add_addon(repo + "/cluster/addons/dashboard/dashboard-controller.yaml", dest)
-        add_addon(repo + "/cluster/addons/dashboard/dashboard-service.yaml", dest)
-        add_addon(repo + "/cluster/addons/dns/kubedns-controller.yaml.in", dest + "/kubedns-controller.yaml")
-        add_addon(repo + "/cluster/addons/dns/kubedns-svc.yaml.in", dest + "/kubedns-svc.yaml")
-        add_addon(repo + "/cluster/addons/cluster-monitoring/influxdb/grafana-service.yaml", dest)
-        add_addon(repo + "/cluster/addons/cluster-monitoring/influxdb/heapster-controller.yaml", dest)
-        add_addon(repo + "/cluster/addons/cluster-monitoring/influxdb/heapster-service.yaml", dest)
-        add_addon(repo + "/cluster/addons/cluster-monitoring/influxdb/influxdb-grafana-controller.yaml", dest)
-        add_addon(repo + "/cluster/addons/cluster-monitoring/influxdb/influxdb-service.yaml", dest)
+        add_addon(repo + "/cluster/addons/dashboard/dashboard-controller.yaml",
+                  dest)
+        add_addon(repo + "/cluster/addons/dashboard/dashboard-service.yaml",
+                  dest)
+        add_addon(repo + "/cluster/addons/dns/kubedns-controller.yaml.in",
+                  dest + "/kubedns-controller.yaml")
+        add_addon(repo + "/cluster/addons/dns/kubedns-svc.yaml.in",
+                  dest + "/kubedns-svc.yaml")
+        influxdb = "/cluster/addons/cluster-monitoring/influxdb"
+        add_addon(repo + influxdb + "/grafana-service.yaml", dest)
+        add_addon(repo + influxdb + "/heapster-controller.yaml", dest)
+        add_addon(repo + influxdb + "/heapster-service.yaml", dest)
+        add_addon(repo + influxdb + "/influxdb-grafana-controller.yaml", dest)
+        add_addon(repo + influxdb + "/influxdb-service.yaml", dest)
 
 # Entry points
+
 
 class UpdateAddonsTactic(Tactic):
     """ This tactic is used by charm-tools to dynamically populate the
     template/addons folder at `charm build` time. """
 
     @classmethod
-    def trigger(cls, relpath):
+    def trigger(cls, entity, target=None, layer=None, next_config=None):
         """ Determines which files the tactic should apply to. We only want
         this tactic to trigger once, so let's use the templates/ folder
         """
+        relpath = entity.relpath(layer.directory) if layer else entity
         return relpath == "templates"
 
     @property
@@ -107,16 +121,20 @@ class UpdateAddonsTactic(Tactic):
             )
         return sigs
 
+
 def parse_args():
     """ Parse args. This is solely done for the usage output with -h """
     parser = argparse.ArgumentParser(description=description)
     parser.parse_args()
 
+
 def main():
     """ Update addons into the layer's templates/addons folder """
     parse_args()
-    dest = os.path.abspath(os.path.join(os.path.dirname(__file__), "../templates/addons"))
+    dest = os.path.abspath(os.path.join(os.path.dirname(__file__),
+                                        "../templates/addons"))
     update_addons(dest)
+
 
 if __name__ == "__main__":
     main()
