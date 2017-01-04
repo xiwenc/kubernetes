@@ -268,8 +268,8 @@ def create_config(server):
     # Create kubernetes configuration in the default location for ubuntu.
     create_kubeconfig('/home/ubuntu/.kube/config', server, ca, key, cert,
                       user='ubuntu')
-    # Make the config file readable by the ubuntu users so juju scp works.
-    cmd = ['chown', 'ubuntu:ubuntu', '/home/ubuntu/.kube/config']
+    # Make the config dir readable by the ubuntu users so juju scp works.
+    cmd = ['chown', '-R', 'ubuntu:ubuntu', '/home/ubuntu/.kube']
     check_call(cmd)
     # Create kubernetes configuration in the default location for root.
     create_kubeconfig('/root/.kube/config', server, ca, key, cert,
