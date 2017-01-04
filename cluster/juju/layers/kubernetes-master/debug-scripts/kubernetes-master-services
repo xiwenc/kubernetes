@@ -7,7 +7,7 @@ for service in kube-apiserver kube-controller-manager kube-scheduler; do
 done
 
 mkdir -p $DEBUG_SCRIPT_DIR/etc-default
-cp /etc/default/kube* $DEBUG_SCRIPT_DIR/etc-default
+cp -v /etc/default/kube* $DEBUG_SCRIPT_DIR/etc-default
 
 mkdir -p $DEBUG_SCRIPT_DIR/lib-systemd-system
-cp /lib/systemd/system/kube* $DEBUG_SCRIPT_DIR/lib-systemd-system
+cp -v /lib/systemd/system/kube* $DEBUG_SCRIPT_DIR/lib-systemd-system
