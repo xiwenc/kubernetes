@@ -5,6 +5,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import logging
 from contextlib import contextmanager
 
 import charmtools.utils
@@ -20,15 +21,12 @@ This will clone the kubernetes repo and place the addons in
 Can be run with no arguments and from any folder.
 """
 
-
-def sh(cmd):
-    """ Alias for subprocess calls """
-    subprocess.check_call(cmd.split())
+log = logging.getLogger(__name__)
 
 
 def clean_addon_dir(addon_dir):
     """ Remove and recreate the addons folder """
-    print("Cleaning " + addon_dir)
+    log.debug("Cleaning " + addon_dir)
     shutil.rmtree(addon_dir, ignore_errors=True)
     os.makedirs(addon_dir)
 
@@ -37,10 +35,17 @@ def clean_addon_dir(addon_dir):
 def kubernetes_repo():
     """ Shallow clone kubernetes repo and clean up when we are done """
     repo = "https://github.com/kubernetes/kubernetes.git"
-    print("Cloning " + repo)
     path = tempfile.mkdtemp(prefix="kubernetes")
     try:
-        sh("git clone --depth 1 {0} {1}".format(repo, path))
+        log.info("Cloning " + repo)
+        cmd = ["git", "clone", "--depth", "1", repo, path]
+        process = subprocess.Popen(cmd, stderr=subprocess.PIPE)
+        stderr = process.communicate()[1].rstrip()
+        process.wait()
+        if process.returncode != 0:
+            log.error(stderr)
+            raise Exception("clone failed: exit code %d" % process.returncode)
+        log.debug(stderr)
         yield path
     finally:
         shutil.rmtree(path)
@@ -53,7 +58,7 @@ def add_addon(source, dest):
     fill it in during deployment. """
     if os.path.isdir(dest):
         dest = os.path.join(dest, os.path.basename(source))
-    print("'%s' -> '%s'" % (source, dest))
+    log.debug("Copying: %s -> %s" % (source, dest))
     with open(source, "r") as f:
         content = f.read()
     content = content.replace("amd64", "{{ arch }}")
@@ -64,8 +69,9 @@ def add_addon(source, dest):
 def update_addons(dest):
     """ Update addons. This will clean the addons folder and add new manifests
     from upstream. """
-    clean_addon_dir(dest)
     with kubernetes_repo() as repo:
+        log.info("Copying addons to charm")
+        clean_addon_dir(dest)
         add_addon(repo + "/cluster/addons/dashboard/dashboard-controller.yaml",
                   dest)
         add_addon(repo + "/cluster/addons/dashboard/dashboard-service.yaml",
