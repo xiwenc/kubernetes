@@ -36,3 +36,7 @@ resources:
     type: file
     filename: kubernetes.tar.gz
     description: "A tarball packaged release of the kubernetes bins."
+  kube-apiserver:
+    type: file
+    filename: kube-apiserver.snap
+    description: kube-apiserver snap

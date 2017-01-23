@@ -27,6 +27,9 @@ from charmhelpers.core.templating import render
 from charmhelpers.fetch import apt_install
 
 
+os.environ['PATH'] += os.pathsep + os.path.join(os.sep, 'snap', 'bin')
+
+
 dashboard_templates = [
     'dashboard-controller.yaml',
     'dashboard-service.yaml',
@@ -100,7 +103,6 @@ def install():
     check_call(split(command))
 
     apps = [
-        {'name': 'kube-apiserver', 'path': '/usr/local/bin'},
         {'name': 'kube-controller-manager', 'path': '/usr/local/bin'},
         {'name': 'kube-scheduler', 'path': '/usr/local/bin'},
         {'name': 'kubectl', 'path': '/usr/local/bin'},
