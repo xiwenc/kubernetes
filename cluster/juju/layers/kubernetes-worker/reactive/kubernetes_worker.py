@@ -76,7 +76,6 @@ def install_kubernetes_components():
     check_call(cmd)
 
     apps = [
-        {'name': 'kube-proxy', 'path': '/usr/local/bin'},
         {'name': 'loopback', 'path': '/opt/cni/bin'}
     ]
 
