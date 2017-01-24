@@ -21,6 +21,7 @@ kubeconfig_path = '/srv/kubernetes/config'
 
 os.environ['PATH'] += os.pathsep + os.path.join(os.sep, 'snap', 'bin')
 
+
 @hook('upgrade-charm')
 def remove_installed_state():
     remove_state('kubernetes-worker.components.installed')
@@ -75,7 +76,6 @@ def install_kubernetes_components():
     check_call(cmd)
 
     apps = [
-        {'name': 'kubelet', 'path': '/usr/local/bin'},
         {'name': 'kube-proxy', 'path': '/usr/local/bin'},
         {'name': 'loopback', 'path': '/opt/cni/bin'}
     ]
@@ -148,8 +148,7 @@ def start_worker(kube_api, kube_dns, cni):
         # Initialize a FlagManager object to add flags to unit data.
         opts = FlagManager('kubelet')
         # Append the DNS flags + data to the FlagManager object.
-
-        opts.add('--cluster-dns', dns['sdn-ip']) # FIXME: sdn-ip needs a rename
+        opts.add('--cluster-dns', dns['sdn-ip'])  # FIXME: sdn-ip needs rename
         opts.add('--cluster-domain', dns['domain'])
 
         create_config(servers[0])

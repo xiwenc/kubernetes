@@ -21,6 +21,12 @@ options:
       jailmode: false
       dangerous: false
       classic: true
+    kubelet:
+      channel: edge
+      devmode: false
+      jailmode: false
+      dangerous: false
+      classic: true
   tls-client:
     ca_certificate_path: '/srv/kubernetes/ca.crt'
     server_certificate_path: '/srv/kubernetes/server.crt'

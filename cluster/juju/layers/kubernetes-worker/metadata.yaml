@@ -32,3 +32,7 @@ resources:
     type: file
     filename: kubectl.snap
     description: kubectl snap
+  kubelet:
+    type: file
+    filename: kubelet.snap
+    description: kubelet snap
