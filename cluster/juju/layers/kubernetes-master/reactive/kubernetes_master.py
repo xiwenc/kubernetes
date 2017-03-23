@@ -558,11 +558,6 @@ def on_config_allow_privileged_change():
     """React to changed 'allow-privileged' config value.
 
     """
-    config = hookenv.config()
-    privileged = config['allow-privileged']
-    if privileged == "auto":
-        return
-
     remove_state('kubernetes-master.components.started')
     remove_state('config.changed.allow-privileged')
 
