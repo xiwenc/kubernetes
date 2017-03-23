@@ -55,8 +55,8 @@ def upgrade_charm():
     # since they can differ between k8s versions
     remove_state('kubernetes-worker.gpu.enabled')
     kubelet_opts = FlagManager('kubelet')
-    kubelet_opts.destroy('--feature-gates')
-    kubelet_opts.destroy('--experimental-nvidia-gpus')
+    kubelet_opts.destroy('feature-gates')
+    kubelet_opts.destroy('experimental-nvidia-gpus')
 
     remove_state('kubernetes-worker.cni-plugins.installed')
     remove_state('kubernetes-worker.config.created')
@@ -668,10 +668,10 @@ def enable_gpu():
     kubelet_opts = FlagManager('kubelet')
     if get_version('kubelet') < (1, 6):
         hookenv.log('Adding --experimental-nvidia-gpus=1 to kubelet')
-        kubelet_opts.add('--experimental-nvidia-gpus', '1')
+        kubelet_opts.add('experimental-nvidia-gpus', '1')
     else:
         hookenv.log('Adding --feature-gates=Accelerators=true to kubelet')
-        kubelet_opts.add('--feature-gates', 'Accelerators=true')
+        kubelet_opts.add('feature-gates', 'Accelerators=true')
 
     # Apply node labels
     _apply_node_label('gpu=true', overwrite=True)
@@ -700,9 +700,9 @@ def disable_gpu():
 
     kubelet_opts = FlagManager('kubelet')
     if get_version('kubelet') < (1, 6):
-        kubelet_opts.destroy('--experimental-nvidia-gpus')
+        kubelet_opts.destroy('experimental-nvidia-gpus')
     else:
-        kubelet_opts.remove('--feature-gates', 'Accelerators=true')
+        kubelet_opts.remove('feature-gates', 'Accelerators=true')
 
     render_init_scripts()
 
