@@ -711,7 +711,7 @@ def configure_master_services():
     api_opts = FlagManager('kube-apiserver')
     controller_opts = FlagManager('kube-controller-manager')
     scheduler_opts = FlagManager('kube-scheduler')
-    scheduler_opts.add('--v', '2')
+    scheduler_opts.add('v', '2')
 
     # Get the tls paths from the layer data.
     layer_options = layer.options('tls-client')
