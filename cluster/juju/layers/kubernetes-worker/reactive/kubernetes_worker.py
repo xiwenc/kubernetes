@@ -276,7 +276,6 @@ def send_data(tls):
       'cni.available')
 def start_worker(kube_api, kube_control, cni):
     ''' Start kubelet using the provided API and DNS info.'''
-    config = hookenv.config()
     servers = get_kube_api_servers(kube_api)
     # Note that the DNS server doesn't necessarily exist at this point. We know
     # what its IP will eventually be, though, so we can go ahead and configure
@@ -427,8 +426,6 @@ def configure_worker_services(api_servers, dns):
     ca_cert_path = layer_options.get('ca_certificate_path')
     server_cert_path = layer_options.get('server_certificate_path')
     server_key_path = layer_options.get('server_key_path')
-
-    unit_name = os.getenv('JUJU_UNIT_NAME').replace('/', '-')
 
     kubelet_opts = FlagManager('kubelet')
     kubelet_opts.add('require-kubeconfig', 'true')
@@ -619,7 +616,8 @@ def set_privileged():
     """
     privileged = hookenv.config('allow-privileged')
     if privileged == 'auto':
-        privileged = 'true' if is_state('kubernetes-worker.gpu.enabled') else 'false'
+        gpu_enabled = is_state('kubernetes-worker.gpu.enabled')
+        privileged = 'true' if gpu_enabled else 'false'
 
     flag = 'allow-privileged'
     hookenv.log('Setting {}={}'.format(flag, privileged))
@@ -703,8 +701,6 @@ def disable_gpu():
         kubelet_opts.destroy('experimental-nvidia-gpus')
     else:
         kubelet_opts.remove('feature-gates', 'Accelerators=true')
-
-    render_init_scripts()
 
     # Remove node labels
     _apply_node_label('gpu', delete=True)

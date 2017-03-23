@@ -537,7 +537,8 @@ def set_privileged():
     """
     privileged = hookenv.config('allow-privileged')
     if privileged == 'auto':
-        privileged = 'true' if is_state('kubernetes-master.gpu.enabled') else 'false'
+        gpu_enabled = is_state('kubernetes-master.gpu.enabled')
+        privileged = 'true' if gpu_enabled else 'false'
 
     flag = 'allow-privileged'
     hookenv.log('Setting {}={}'.format(flag, privileged))
