@@ -50,6 +50,14 @@ db = unitdata.kv()
 def upgrade_charm():
     cleanup_pre_snap_services()
     check_resources_for_upgrade_needed()
+
+    # Remove gpu.enabled state so we can reconfigure gpu-related kubelet flags,
+    # since they can differ between k8s versions
+    remove_state('kubernetes-worker.gpu.enabled')
+    kubelet_opts = FlagManager('kubelet')
+    kubelet_opts.destroy('--feature-gates')
+    kubelet_opts.destroy('--experimental-nvidia-gpus')
+
     remove_state('kubernetes-worker.cni-plugins.installed')
     remove_state('kubernetes-worker.config.created')
     remove_state('kubernetes-worker.ingress.available')
@@ -76,13 +84,6 @@ def set_upgrade_needed():
 def cleanup_pre_snap_services():
     # remove old states
     remove_state('kubernetes-worker.components.installed')
-
-    # Remove gpu.enabled state so we can reconfigure gpu-related kubelet flags,
-    # since they can differ between k8s versions
-    remove_state('kubernetes-worker.gpu.enabled')
-    kubelet_opts = FlagManager('kubelet')
-    kubelet_opts.destroy('--feature-gates')
-    kubelet_opts.destroy('--experimental-nvidia-gpus')
 
     # disable old services
     services = ['kubelet', 'kube-proxy']
