@@ -544,7 +544,7 @@ def set_privileged():
     hookenv.log('Setting {}={}'.format(flag, privileged))
 
     api_opts = FlagManager('kube-apiserver')
-    api_opts.set(flag, privileged)
+    api_opts.add(flag, privileged)
 
     if privileged == 'true':
         set_state('kubernetes-master.privileged')

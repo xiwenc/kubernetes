@@ -623,7 +623,7 @@ def set_privileged():
     hookenv.log('Setting {}={}'.format(flag, privileged))
 
     kubelet_opts = FlagManager('kubelet')
-    kubelet_opts.set(flag, privileged)
+    kubelet_opts.add(flag, privileged)
 
     if privileged == 'true':
         set_state('kubernetes-worker.privileged')
