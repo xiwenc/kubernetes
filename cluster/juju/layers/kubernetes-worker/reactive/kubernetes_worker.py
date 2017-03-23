@@ -202,7 +202,6 @@ def install_cni_plugins():
         hookenv.log(install)
         check_call(install)
 
-    set_state('kubernetes-worker.components.installed')
     set_state('kubernetes-worker.cni-plugins.installed')
 
 
@@ -214,7 +213,6 @@ def set_app_version():
     hookenv.application_version_set(version.split(b' v')[-1].rstrip())
 
 
-@when('kubernetes-worker.components.installed')
 @when('kubernetes-worker.snaps.installed')
 @when_not('kube-control.dns.available')
 def notify_user_transient_status():
@@ -231,7 +229,6 @@ def notify_user_transient_status():
 
 
 @when('kubernetes-worker.snaps.installed',
-      'kubernetes-worker.components.installed',
       'kube-control.dns.available')
 @when_not('kubernetes-worker.snaps.upgrade-needed')
 def charm_status(kube_control):
@@ -692,7 +689,6 @@ def restart_kubelet():
 
 
 @when('cuda.installed')
-@when('kubernetes-worker.components.installed')
 @when('kubernetes-worker.config.created')
 @when_not('kubernetes-worker.gpu.enabled')
 def enable_gpu():
