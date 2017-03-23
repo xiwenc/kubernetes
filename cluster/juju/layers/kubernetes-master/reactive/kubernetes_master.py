@@ -81,6 +81,7 @@ def rename_file_idempotent(source, destination):
 
 def migrate_from_pre_snaps():
     # remove old states
+    remove_state('kubernetes.components.installed')
     remove_state('kubernetes.dashboard.available')
     remove_state('kube-dns.available')
     remove_state('kubernetes-master.app_version.set')
@@ -146,7 +147,6 @@ def install_snaps():
     hookenv.status_set('maintenance', 'Installing cdk-addons snap')
     snap.install('cdk-addons', channel=channel)
     set_state('kubernetes-master.snaps.installed')
-    set_state('kubernetes-master.components.installed')
 
 
 @when('config.changed.channel')
