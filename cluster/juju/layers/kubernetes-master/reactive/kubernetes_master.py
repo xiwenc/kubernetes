@@ -35,6 +35,7 @@ from charms.layer import snap
 from charms.reactive import hook
 from charms.reactive import remove_state
 from charms.reactive import set_state
+from charms.reactive import is_state
 from charms.reactive import when, when_any, when_not
 from charms.reactive.helpers import data_changed
 from charms.kubernetes.common import get_version
@@ -530,45 +531,24 @@ def remove_nrpe_config(nagios=None):
         nrpe_setup.remove_check(shortname=service)
 
 
-def set_privileged(privileged, render_config=True):
-    """Update the KUBE_ALLOW_PRIV flag for kube-apiserver and re-render config.
-
-    If the flag already matches the requested value, this is a no-op.
-
-    :param str privileged: "true" or "false"
-    :param bool render_config: whether to render new config file
-    :return: True if the flag was changed, else false
+def set_privileged():
+    """Update the allow-privileged flag for kube-apiserver.
 
     """
-    if privileged == "true":
+    privileged = hookenv.config('allow-privileged')
+    if privileged == 'auto':
+        privileged = 'true' if is_state('kubernetes-master.gpu.enabled') else 'false'
+
+    flag = 'allow-privileged'
+    hookenv.log('Setting {}={}'.format(flag, privileged))
+
+    api_opts = FlagManager('kube-apiserver')
+    api_opts.set(flag, privileged)
+
+    if privileged == 'true':
         set_state('kubernetes-master.privileged')
     else:
         remove_state('kubernetes-master.privileged')
-
-    flag = '--allow-privileged'
-    kube_allow_priv_opts = FlagManager('KUBE_ALLOW_PRIV')
-    if kube_allow_priv_opts.get(flag) == privileged:
-        # Flag isn't changing, nothing to do
-        return False
-
-    hookenv.log('Setting {}={}'.format(flag, privileged))
-
-    # Update --allow-privileged flag value
-    kube_allow_priv_opts.add(flag, privileged, strict=True)
-
-    # re-render config with new options
-    if render_config:
-        context = {
-            'kube_allow_priv': kube_allow_priv_opts.to_s(),
-        }
-
-        # render the kube-defaults file
-        render('kube-defaults.defaults', '/etc/default/kube-defaults', context)
-
-        # signal that we need a kube-apiserver restart
-        set_state('kubernetes-master.kube-apiserver.restart')
-
-    return True
 
 
 @when('config.changed.allow-privileged')
@@ -582,17 +562,8 @@ def on_config_allow_privileged_change():
     if privileged == "auto":
         return
 
-    set_privileged(privileged)
+    remove_state('kubernetes-master.components.started')
     remove_state('config.changed.allow-privileged')
-
-
-@when('kubernetes-master.kube-apiserver.restart')
-def restart_kube_apiserver():
-    """Restart kube-apiserver.
-
-    """
-    host.service_restart('kube-apiserver')
-    remove_state('kubernetes-master.kube-apiserver.restart')
 
 
 @when('kube-control.gpu.available')
@@ -612,7 +583,7 @@ def on_gpu_available(kube_control):
         )
         return
 
-    set_privileged("true")
+    remove_state('kubernetes-master.components.started')
     set_state('kubernetes-master.gpu.enabled')
 
 
@@ -751,9 +722,7 @@ def configure_master_services():
     server_key_path = layer_options.get('server_key_path')
 
     # set --allow-privileged flag for kube-apiserver
-    set_privileged(
-        "true" if config['allow-privileged'] == "true" else "false",
-        render_config=False)
+    set_privileged()
 
     # Handle static options for now
     api_opts.add('service-cluster-ip-range', service_cidr())
