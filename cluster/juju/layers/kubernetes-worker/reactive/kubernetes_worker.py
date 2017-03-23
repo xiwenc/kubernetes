@@ -648,18 +648,6 @@ def on_config_allow_privileged_change():
     remove_state('config.changed.allow-privileged')
 
 
-@when('kubernetes-worker.kubelet.restart')
-def restart_kubelet():
-    """Restart kubelet.
-
-    """
-    # Make sure systemd loads latest service config
-    call(['systemctl', 'daemon-reload'])
-    # Restart kubelet
-    service_restart('kubelet')
-    remove_state('kubernetes-worker.kubelet.restart')
-
-
 @when('cuda.installed')
 @when('kubernetes-worker.config.created')
 @when_not('kubernetes-worker.gpu.enabled')
@@ -723,7 +711,7 @@ def disable_gpu():
     _apply_node_label('cuda', delete=True)
 
     remove_state('kubernetes-worker.gpu.enabled')
-    set_state('kubernetes-worker.kubelet.restart')
+    set_state('kubernetes-worker.restart-needed')
 
 
 @when('kubernetes-worker.gpu.enabled')
