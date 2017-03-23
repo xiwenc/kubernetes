@@ -28,7 +28,7 @@ from charms.reactive import hook
 from charms.reactive import set_state, remove_state, is_state
 from charms.reactive import when, when_any, when_not
 
-from charms.kubernetes.common import get_version, reset_versions
+from charms.kubernetes.common import get_version
 from charms.kubernetes.flagmanager import FlagManager
 
 from charms.reactive.helpers import data_changed, any_file_changed
@@ -202,7 +202,6 @@ def install_cni_plugins():
         hookenv.log(install)
         check_call(install)
 
-    reset_versions()
     set_state('kubernetes-worker.components.installed')
     set_state('kubernetes-worker.cni-plugins.installed')
 
