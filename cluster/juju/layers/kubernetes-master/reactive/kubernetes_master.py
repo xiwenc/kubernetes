@@ -626,32 +626,6 @@ def disable_gpu_mode():
     remove_state('kubernetes-master.gpu.enabled')
 
 
-def create_addon(template, context):
-    '''Create an addon from a template'''
-    source = 'addons/' + template
-    target = '/etc/kubernetes/addons/' + template
-    render(source, target, context)
-    # Need --force when upgrading between k8s versions where the templates have
-    # changed.
-    cmd = ['kubectl', 'apply', '--force', '-f', target]
-    check_call(cmd)
-
-
-def delete_addon(template):
-    '''Delete an addon from a template'''
-    target = '/etc/kubernetes/addons/' + template
-    cmd = ['kubectl', 'delete', '-f', target]
-    call(cmd)
-
-
-def get_node_count():
-    '''Return the number of Kubernetes nodes in the cluster'''
-    cmd = ['kubectl', 'get', 'nodes', '-o', 'name']
-    output = check_output(cmd)
-    node_count = len(output.splitlines())
-    return node_count
-
-
 def arch():
     '''Return the package architecture as a string. Raise an exception if the
     architecture is not supported by kubernetes.'''
