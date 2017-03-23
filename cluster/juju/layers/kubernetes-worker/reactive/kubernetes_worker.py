@@ -289,19 +289,8 @@ def start_worker(kube_api, kube_control, cni):
             data_changed('kube-api-servers', servers) or
             data_changed('kube-dns', dns)):
 
-        # Create FlagManager for kubelet and add dns flags
-        opts = FlagManager('kubelet')
-        opts.add('--cluster-dns', dns['sdn-ip'])  # FIXME sdn-ip needs a rename
-        opts.add('--cluster-domain', dns['domain'])
-
-        # Create FlagManager for KUBE_MASTER and add api server addresses
-        kube_master_opts = FlagManager('KUBE_MASTER')
-        kube_master_opts.add('--master', ','.join(servers))
-
         # set --allow-privileged flag for kubelet
-        set_privileged(
-            "true" if config['allow-privileged'] == "true" else "false",
-            render_config=False)
+        set_privileged()
 
         create_config(servers[0])
         configure_worker_services(servers, dns)
@@ -444,13 +433,11 @@ def configure_worker_services(api_servers, dns):
     kubelet_opts = FlagManager('kubelet')
     kubelet_opts.add('require-kubeconfig', 'true')
     kubelet_opts.add('kubeconfig', kubeconfig_path)
-    kubelet_opts.add('kube_allow_priv', FlagManager('KUBE_ALLOW_PRIV').to_s())
     kubelet_opts.add('network-plugin', 'cni')
     kubelet_opts.add('logtostderr', 'true')
     kubelet_opts.add('v', '0')
     kubelet_opts.add('address', '0.0.0.0')
     kubelet_opts.add('port', '10250')
-    kubelet_opts.add('allow-privileged', 'false')
     kubelet_opts.add('cluster-dns', dns['sdn-ip'])
     kubelet_opts.add('cluster-domain', dns['domain'])
     kubelet_opts.add('anonymous-auth', 'false')
@@ -626,40 +613,24 @@ def remove_nrpe_config(nagios=None):
         nrpe_setup.remove_check(shortname=service)
 
 
-def set_privileged(privileged, render_config=True):
-    """Update the KUBE_ALLOW_PRIV flag for kubelet and re-render config files.
-
-    If the flag already matches the requested value, this is a no-op.
-
-    :param str privileged: "true" or "false"
-    :param bool render_config: whether to render new config files
-    :return: True if the flag was changed, else false
+def set_privileged():
+    """Update the allow-privileged flag for kube-apiserver.
 
     """
-    if privileged == "true":
+    privileged = hookenv.config('allow-privileged')
+    if privileged == 'auto':
+        privileged = 'true' if is_state('kubernetes-worker.gpu.enabled') else 'false'
+
+    flag = 'allow-privileged'
+    hookenv.log('Setting {}={}'.format(flag, privileged))
+
+    kubelet_opts = FlagManager('kubelet')
+    kubelet_opts.set(flag, privileged)
+
+    if privileged == 'true':
         set_state('kubernetes-worker.privileged')
     else:
         remove_state('kubernetes-worker.privileged')
-
-    flag = '--allow-privileged'
-    kube_allow_priv_opts = FlagManager('KUBE_ALLOW_PRIV')
-    if kube_allow_priv_opts.get(flag) == privileged:
-        # Flag isn't changing, nothing to do
-        return False
-
-    hookenv.log('Setting {}={}'.format(flag, privileged))
-
-    # Update --allow-privileged flag value
-    kube_allow_priv_opts.add(flag, privileged, strict=True)
-
-    # re-render config with new options
-    if render_config:
-        render_init_scripts()
-
-        # signal that we need a kubelet restart
-        set_state('kubernetes-worker.kubelet.restart')
-
-    return True
 
 
 @when('config.changed.allow-privileged')
@@ -673,7 +644,7 @@ def on_config_allow_privileged_change():
     if privileged == "auto":
         return
 
-    set_privileged(privileged)
+    set_state('kubernetes-worker.restart-needed')
     remove_state('config.changed.allow-privileged')
 
 
@@ -714,10 +685,6 @@ def enable_gpu():
         hookenv.log('Adding --feature-gates=Accelerators=true to kubelet')
         kubelet_opts.add('--feature-gates', 'Accelerators=true')
 
-    # enable privileged mode and re-render config files
-    set_privileged("true", render_config=False)
-    render_init_scripts()
-
     # Apply node labels
     _apply_node_label('gpu=true', overwrite=True)
     _apply_node_label('cuda=true', overwrite=True)
@@ -728,7 +695,7 @@ def enable_gpu():
     check_call(['nvidia-smi'])
 
     set_state('kubernetes-worker.gpu.enabled')
-    set_state('kubernetes-worker.kubelet.restart')
+    set_state('kubernetes-worker.restart-needed')
 
 
 @when('kubernetes-worker.gpu.enabled')
