@@ -781,51 +781,6 @@ def configure_master_services():
     if get_version('kube-apiserver') < (1, 6):
         hookenv.log('Removing DefaultTolerationSeconds from admission-control')
         admission_control.remove('DefaultTolerationSeconds')
-    api_opts.add(
-        '--admission-control', ','.join(admission_control), strict=True)
-
-    # Default to 3 minute resync. TODO: Make this configureable?
-    controller_opts.add('--min-resync-period', '3m')
-    controller_opts.add('--v', '2')
-    controller_opts.add('--root-ca-file', ca_cert_path)
-
-    context.update({
-        'kube_allow_priv': FlagManager('KUBE_ALLOW_PRIV').to_s(),
-        'kube_apiserver_flags': api_opts.to_s(),
-        'kube_scheduler_flags': scheduler_opts.to_s(),
-        'kube_controller_manager_flags': controller_opts.to_s(),
-    })
-
-    # Render the configuration files that contains parameters for
-    # the apiserver, scheduler, and controller-manager
-    render_service('kube-apiserver', context)
-    render_service('kube-controller-manager', context)
-    render_service('kube-scheduler', context)
-
-    # explicitly render the generic defaults file
-    render('kube-defaults.defaults', '/etc/default/kube-defaults', context)
-
-    # when files change on disk, we need to inform systemd of the changes
-    call(['systemctl', 'daemon-reload'])
-    call(['systemctl', 'enable', 'kube-apiserver'])
-    call(['systemctl', 'enable', 'kube-controller-manager'])
-    call(['systemctl', 'enable', 'kube-scheduler'])
-
-
-def render_service(service_name, context):
-    '''Render the systemd service by name.'''
-    unit_directory = '/lib/systemd/system'
-    source = '{0}.service'.format(service_name)
-    target = os.path.join(unit_directory, '{0}.service'.format(service_name))
-    render(source, target, context)
-    conf_directory = '/etc/default'
-    source = '{0}.defaults'.format(service_name)
-    target = os.path.join(conf_directory, service_name)
-    render(source, target, context)
-
-    if apiserverVersion() < (1, 6):
-        hookenv.log('Removing DefaultTolerationSeconds from admission-control')
-        admission_control.remove('DefaultTolerationSeconds')
     api_opts.add('admission-control', ','.join(admission_control), strict=True)
 
     # Default to 3 minute resync. TODO: Make this configureable?
