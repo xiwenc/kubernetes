@@ -37,7 +37,7 @@ from charms.reactive import remove_state
 from charms.reactive import set_state
 from charms.reactive import when, when_any, when_not
 from charms.reactive.helpers import data_changed
-from charms.kubernetes.common import get_version, reset_versions
+from charms.kubernetes.common import get_version
 from charms.kubernetes.flagmanager import FlagManager
 
 from charmhelpers.core import hookenv
@@ -146,9 +146,6 @@ def install_snaps():
     hookenv.status_set('maintenance', 'Installing cdk-addons snap')
     snap.install('cdk-addons', channel=channel)
     set_state('kubernetes-master.snaps.installed')
-
-
-    reset_versions()
     set_state('kubernetes-master.components.installed')
 
 
