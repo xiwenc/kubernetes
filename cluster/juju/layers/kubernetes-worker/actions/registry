@@ -17,6 +17,7 @@
 # - when https://bugs.launchpad.net/juju/+bug/1661015 is fixed, handle the
 # base64 encoding the parameters in the action itself
 
+import os
 import sys
 
 from base64 import b64encode
@@ -26,6 +27,7 @@ from charmhelpers.core.hookenv import action_set
 from charms.templating.jinja2 import render
 from subprocess import call
 
+os.environ['PATH'] += os.pathsep + os.path.join(os.sep, 'snap', 'bin')
 
 deletion = action_get('delete')
 
@@ -55,7 +57,7 @@ if param_error:
 context['ingress'] = action_get('ingress')
 
 # Declare a kubectl template when invoking kubectl
-kubectl = ['kubectl', '--kubeconfig=/srv/kubernetes/config']
+kubectl = ['kubectl', '--kubeconfig=/root/cdk/kubeconfig']
 
 # Remove deployment if requested
 if deletion:
@@ -75,11 +77,11 @@ if deletion:
     sys.exit(0)
 
 # Creation request
-render('registry.yaml', '/etc/kubernetes/addons/registry.yaml',
+render('registry.yaml', '/root/cdk/addons/registry.yaml',
        context)
 
 create_command = kubectl + ['create', '-f',
-                            '/etc/kubernetes/addons/registry.yaml']
+                            '/root/cdk/addons/registry.yaml']
 
 create_response = call(create_command)
 
@@ -107,9 +109,9 @@ if create_response == 0:
 
     else:
         # No existing ConfigMap, create it
-        render('registry-configmap.yaml', '/etc/kubernetes/addons/registry-configmap.yaml',
+        render('registry-configmap.yaml', '/root/cdk/addons/registry-configmap.yaml',
                context)
-        create_cm_command = kubectl + ['create', '-f', '/etc/kubernetes/addons/registry-configmap.yaml']
+        create_cm_command = kubectl + ['create', '-f', '/root/cdk/addons/registry-configmap.yaml']
         create_cm_response = call(create_cm_command)
 
         if create_cm_response == 0:
