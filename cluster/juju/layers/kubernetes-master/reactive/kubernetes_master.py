@@ -531,25 +531,15 @@ def remove_nrpe_config(nagios=None):
         nrpe_setup.remove_check(shortname=service)
 
 
-def set_privileged():
-    """Update the allow-privileged flag for kube-apiserver.
+def is_privileged():
+    """Return boolean indicating whether or not to set allow-privileged=true.
 
     """
     privileged = hookenv.config('allow-privileged')
     if privileged == 'auto':
-        gpu_enabled = is_state('kubernetes-master.gpu.enabled')
-        privileged = 'true' if gpu_enabled else 'false'
-
-    flag = 'allow-privileged'
-    hookenv.log('Setting {}={}'.format(flag, privileged))
-
-    api_opts = FlagManager('kube-apiserver')
-    api_opts.add(flag, privileged)
-
-    if privileged == 'true':
-        set_state('kubernetes-master.privileged')
+        return is_state('kubernetes-master.gpu.enabled')
     else:
-        remove_state('kubernetes-master.privileged')
+        return privileged == 'true'
 
 
 @when('config.changed.allow-privileged')
@@ -717,8 +707,12 @@ def configure_master_services():
     server_cert_path = layer_options.get('server_certificate_path')
     server_key_path = layer_options.get('server_key_path')
 
-    # set --allow-privileged flag for kube-apiserver
-    set_privileged()
+    if is_privileged():
+        api_opts.add('allow-privileged', 'true', strict=True)
+        set_state('kubernetes-master.privileged')
+    else:
+        api_opts.add('allow-privileged', 'false', strict=True)
+        remove_state('kubernetes-master.privileged')
 
     # Handle static options for now
     api_opts.add('service-cluster-ip-range', service_cidr())
