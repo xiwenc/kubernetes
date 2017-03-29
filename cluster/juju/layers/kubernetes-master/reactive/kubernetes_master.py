@@ -267,7 +267,7 @@ def idle_status():
         hookenv.status_set('active', 'Kubernetes master running.')
 
 
-@when('etcd.available', 'certificates.server.cert.available',
+@when('etcd.available', 'tls_client.server.certificate.saved',
       'authentication.setup')
 @when_not('kubernetes-master.components.started')
 def start_master(etcd, tls):
