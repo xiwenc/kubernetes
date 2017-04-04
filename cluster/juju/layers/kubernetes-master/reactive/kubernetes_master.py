@@ -114,6 +114,7 @@ def migrate_from_pre_snaps():
         "/etc/default/kube-controller-manager.defaults",
         "/etc/default/kube-scheduler.defaults",
         "/srv/kubernetes",
+        "/home/ubuntu/kubectl",
         "/usr/local/bin/kubectl",
         "/usr/local/bin/kube-apiserver",
         "/usr/local/bin/kube-controller-manager",
