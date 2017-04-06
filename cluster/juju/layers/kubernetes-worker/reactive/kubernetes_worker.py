@@ -278,7 +278,7 @@ def send_data(tls):
       'tls_client.ca.saved', 'tls_client.client.certificate.saved',
       'tls_client.client.key.saved', 'tls_client.server.certificate.saved',
       'tls_client.server.key.saved', 'kube-control.dns.available',
-      'cni.available')
+      'cni.available', 'kubernetes-worker.restart-needed')
 def start_worker(kube_api, kube_control, cni):
     ''' Start kubelet using the provided API and DNS info.'''
     servers = get_kube_api_servers(kube_api)
