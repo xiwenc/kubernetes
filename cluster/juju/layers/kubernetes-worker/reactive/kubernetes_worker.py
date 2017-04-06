@@ -687,9 +687,10 @@ def enable_gpu():
     _apply_node_label('gpu=true', overwrite=True)
     _apply_node_label('cuda=true', overwrite=True)
 
+    set_state('kubernetes-worker.gpu.enabled')
+
     set_privileged()
 
-    set_state('kubernetes-worker.gpu.enabled')
     set_state('kubernetes-worker.restart-needed')
 
 
@@ -715,9 +716,10 @@ def disable_gpu():
     _apply_node_label('gpu', delete=True)
     _apply_node_label('cuda', delete=True)
 
+    remove_state('kubernetes-worker.gpu.enabled')
+
     set_privileged()
 
-    remove_state('kubernetes-worker.gpu.enabled')
     set_state('kubernetes-worker.restart-needed')
 
 
