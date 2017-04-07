@@ -631,7 +631,7 @@ def remove_nrpe_config(nagios=None):
 
 
 def set_privileged():
-    """Update the allow-privileged flag for kube-apiserver.
+    """Update the allow-privileged flag for kubelet.
 
     """
     privileged = hookenv.config('allow-privileged')
@@ -705,6 +705,7 @@ def enable_gpu():
 
 @when('kubernetes-worker.gpu.enabled')
 @when_not('kubernetes-worker.privileged')
+@when_not('kubernetes-worker.restart-needed')
 def disable_gpu():
     """Disable GPU usage on this node.
 
