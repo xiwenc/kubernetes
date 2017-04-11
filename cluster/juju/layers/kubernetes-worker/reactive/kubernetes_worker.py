@@ -307,6 +307,10 @@ def start_worker(kube_api, kube_control, cni):
     dns = kube_control.get_dns()
     cluster_cidr = cni.get_config()['cidr']
 
+    if cluster_cidr is None:
+        hookenv.log('Waiting for cluster cidr.')
+        return
+
     # set --allow-privileged flag for kubelet
     set_privileged()
 
