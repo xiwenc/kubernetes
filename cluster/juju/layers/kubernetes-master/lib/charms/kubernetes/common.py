@@ -56,14 +56,16 @@ def retry(times, delay_secs):
         Returns: A callable that would return the last call outcome
 
         """
-        res = func()
-        attempt = 0
-        while not res and attempt < times:
-            sleep(delay_secs)
-            res = func()
-            if res:
-                break
-            attempt += 1
-        return lambda: res
+        def _wrapped(*args, **kwargs):
+            res = func(*args, **kwargs)
+            attempt = 0
+            while not res and attempt < times:
+                sleep(delay_secs)
+                res = func(*args, **kwargs)
+                if res:
+                    break
+                attempt += 1
+            return res
+        return _wrapped
 
     return retry_decorator
