@@ -790,6 +790,7 @@ def configure_master_services():
     api_opts.add('insecure-bind-address', '127.0.0.1')
     api_opts.add('insecure-port', '8080')
     api_opts.add('storage-backend', 'etcd2')  # FIXME: add etcd3 support
+    api_opts.add('authorization-mode', hookenv.config('authorization-mode'))
     admission_control = [
         'NamespaceLifecycle',
         'LimitRanger',
