@@ -193,10 +193,6 @@ def setup_leader_authentication():
             setup_basic_auth(username='admin', groups='system:masters',
                              password=token_generator(32, 'admintoken'),
                              userid='admin')
-        if not os.path.isfile(known_tokens):
-            # setup_tokens(None, 'admin', 'admin')
-            setup_tokens(None, 'kubelet', 'kubelet')
-            setup_tokens(None, 'kube_proxy', 'kube_proxy')
         # Generate the default service account token key
         os.makedirs('/root/cdk', exist_ok=True)
         if not os.path.isfile(service_key):
@@ -350,13 +346,13 @@ def send_cluster_dns_detail(kube_control):
 
 @when('kube-control.auth.requested')
 @when('snap.installed.kubectl')
+@when('leadership.is_leader')
 def create_service_configs(kube_control):
     """Create the users for kubelet and kube-proxy """
     # generate the username/pass for the requesting unit
-    requestor = kube_control.auth_requestor()
-    kubelet_token = token_generator(64, kube_control.auth_requestor())
-    setup_tokens(kubelet_token, requestor, kube_control.conversation.scope,
-                 "system:nodes")
+    userid, user = kube_control.auth_user()
+    kubelet_token = token_generator(64, user)
+    setup_tokens(kubelet_token, user, userid, "system:nodes")
     proxy_token = get_token('kube-proxy')
     if not proxy_token:
         setup_tokens(None, 'kube-proxy', 'kube-proxy', "kube-proxy")
@@ -364,6 +360,7 @@ def create_service_configs(kube_control):
 
     # Send the data
     kube_control.sign_auth_request(kubelet_token, proxy_token)
+    remove_state('authentication.setup')
 
 
 @when_not('kube-control.connected')
@@ -721,17 +718,18 @@ def create_kubeconfig(kubeconfig, server, ca, key=None, certificate=None,
           '--server={2} --certificate-authority={3} --embed-certs=true'
     check_call(split(cmd.format(kubeconfig, cluster, server, ca)))
     # Create the credentials using the client flags.
-    cmd = 'kubectl config --kubeconfig={0} set-credentials {1} '
+    cmd = 'kubectl config --kubeconfig={0} ' \
+          'set-credentials {1} '.format(kubeconfig, user)
 
     if key and certificate:
-        cmd = '{0} --client-key={2} --client-certificate={3} '\
+        cmd = '{0} --client-key={1} --client-certificate={2} '\
               '--embed-certs=true'.format(cmd, key, certificate)
     if password:
         cmd = "{0} --username={1} --password={1}".format(cmd, user, password)
     # This is mutually exclusive from password. They will not work together.
     if token:
-        cmd = "{0} --token={1}".format(token)
-    check_call(split(cmd.format(kubeconfig, user, key, certificate)))
+        cmd = "{0} --token={1}".format(cmd, token)
+    check_call(split(cmd))
     # Create a default context with the cluster.
     cmd = 'kubectl config --kubeconfig={0} set-context {1} ' \
           '--cluster={2} --user={3}'

@@ -770,6 +770,14 @@ def request_kubelet_and_proxy_credentials(kube_control):
     kube_control.set_auth_request(nodeuser)
 
 
+@when('kube-control.auth.available')
+def render_service_auth_templates(kube_control):
+    """Render the authentication templates for kubelet and kube-proxy.
+
+    """
+    pass
+
+
 @when_not('kube-control.connected')
 def missing_kube_control():
     """Inform the operator they need to add the kube-control relation.
