@@ -189,9 +189,11 @@ def setup_leader_authentication():
     # Try first to fetch data from an old leadership broadcast.
     if not get_keys_from_leader(keys):
         if not os.path.isfile(basic_auth):
-            setup_basic_auth('admin', 'admin', 'admin')
+            # setup_basic_auth('admin', 'admin', 'admin')
+            setup_basic_auth(token_generator(32, 'admintoken'), 'admin',
+                             'admin')
         if not os.path.isfile(known_tokens):
-            setup_tokens(None, 'admin', 'admin')
+            # setup_tokens(None, 'admin', 'admin')
             setup_tokens(None, 'kubelet', 'kubelet')
             setup_tokens(None, 'kube_proxy', 'kube_proxy')
         # Generate the default service account token key
@@ -682,10 +684,16 @@ def build_kubeconfig(server):
 
 
 def create_kubeconfig(kubeconfig, server, ca, key, certificate, user='ubuntu',
-                      context='juju-context', cluster='juju-cluster'):
+                      context='juju-context', cluster='juju-cluster',
+                      password=None, token=None):
     '''Create a configuration for Kubernetes based on path using the supplied
     arguments for values of the Kubernetes server, CA, key, certificate, user
     context and cluster.'''
+    # token and password are mutually exclusive. Error early if both are
+    # present. The developer has requested an impossible situation.
+    # see: kubectl config set-credentials --help
+    if token and password:
+        raise ValueError('Token and Password are mutually exclusive.')
     # Create the config file with the address of the master server.
     cmd = 'kubectl config --kubeconfig={0} set-cluster {1} ' \
           '--server={2} --certificate-authority={3} --embed-certs=true'
@@ -693,6 +701,11 @@ def create_kubeconfig(kubeconfig, server, ca, key, certificate, user='ubuntu',
     # Create the credentials using the client flags.
     cmd = 'kubectl config --kubeconfig={0} set-credentials {1} ' \
           '--client-key={2} --client-certificate={3} --embed-certs=true'
+    if password:
+        cmd = "{0} --username={1} --password={1}".format(cmd, user, password)
+    # This is mutually exclusive from password. They will not work together.
+    if token:
+        cmd = "{0} --token={1}".format(token)
     check_call(split(cmd.format(kubeconfig, user, key, certificate)))
     # Create a default context with the cluster.
     cmd = 'kubectl config --kubeconfig={0} set-context {1} ' \
@@ -810,6 +823,9 @@ def configure_master_services():
     controller_opts.add('root-ca-file', ca_cert_path)
     controller_opts.add('logtostderr', 'true')
     controller_opts.add('master', 'http://127.0.0.1:8080')
+    # Required for RBAC core control loops
+    # https://kubernetes.io/docs/admin/authorization/rbac/#controller-roles
+    # controller_opts.add('use-service-account-credentials', None)
 
     scheduler_opts.add('v', '2')
     scheduler_opts.add('logtostderr', 'true')
@@ -843,10 +859,28 @@ def setup_tokens(token, username, user):
         os.makedirs(root_cdk)
     known_tokens = os.path.join(root_cdk, 'known_tokens.csv')
     if not token:
-        alpha = string.ascii_letters + string.digits
-        token = ''.join(random.SystemRandom().choice(alpha) for _ in range(32))
+        token = token_generator(32)
     with open(known_tokens, 'a') as stream:
         stream.write('{0},{1},{2}\n'.format(token, username, user))
+
+
+def token_generator(length=32, save_salt=None):
+    ''' Generate a random token for use in passwords and account tokens.
+
+    param: length - the length of the token to generate
+    param: save_salt - the key to store the value of the token. Will Override
+    and return the saved_salt if specified.'''
+    alpha = string.ascii_letters + string.digits
+    token = ''.join(random.SystemRandom().choice(alpha) for _ in range(length))
+
+    if save_salt:
+        db = unitdata.kv()
+        if not db.get(save_salt):
+            db.set(save_salt, token)
+        else:
+            return db.get(save_salt)
+
+    return token
 
 
 @retry(times=3, delay_secs=10)
