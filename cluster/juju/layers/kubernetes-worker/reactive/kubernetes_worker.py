@@ -761,6 +761,15 @@ def notify_master_gpu_not_enabled(kube_control):
     kube_control.set_gpu(False)
 
 
+@when('kube-control.connected')
+def request_kubelet_and_proxy_credentials(kube_control):
+    """ Request kubelet node authorization with a well formed kubelet user.
+    This also implies that we are requesting kube-proxy auth. """
+
+    nodeuser = 'system:node:{}'.format(gethostname())
+    kube_control.set_auth_request(nodeuser)
+
+
 @when_not('kube-control.connected')
 def missing_kube_control():
     """Inform the operator they need to add the kube-control relation.
