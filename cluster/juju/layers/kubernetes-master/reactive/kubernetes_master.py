@@ -189,13 +189,14 @@ def setup_leader_authentication():
     # Try first to fetch data from an old leadership broadcast.
     if not get_keys_from_leader(keys):
         if not os.path.isfile(basic_auth):
-            setup_basic_auth('admin', 'admin', 'admin')
-        if not os.path.isfile(known_tokens):
-            setup_tokens(None, 'admin', 'admin')
-            setup_tokens(None, 'kubelet', 'kubelet')
-            setup_tokens(None, 'kube_proxy', 'kube_proxy')
+            # Default system user. with full access to the cluster.
+            setup_basic_auth(username='admin', groups='system:masters',
+                             password=token_generator(32, 'admintoken'),
+                             user='admin')
         # Generate the default service account token key
         os.makedirs('/root/cdk', exist_ok=True)
+        if not os.path.isfile(known_tokens):
+            touch(known_tokens)
         if not os.path.isfile(service_key):
             cmd = ['openssl', 'genrsa', '-out', service_key,
                    '2048']
@@ -343,6 +344,25 @@ def send_cluster_dns_detail(kube_control):
     # where we're going to put it, though, so let's send the info anyway.
     dns_ip = get_dns_ip()
     kube_control.set_dns(53, hookenv.config('dns_domain'), dns_ip)
+
+
+@when('kube-control.auth.requested')
+@when('snap.installed.kubectl')
+@when('leadership.is_leader')
+def create_service_configs(kube_control):
+    """Create the users for kubelet and kube-proxy """
+    # generate the username/pass for the requesting unit
+    userid, user = kube_control.auth_user()
+    kubelet_token = token_generator(64, user)
+    setup_tokens(kubelet_token, user, userid, "system:nodes")
+    proxy_token = get_token('kube-proxy')
+    if not proxy_token:
+        setup_tokens(None, 'system:kube-proxy', 'kube-proxy', "kube-proxy")
+        proxy_token = get_token('kube-proxy')
+
+    # Send the data
+    kube_control.sign_auth_request(kubelet_token, proxy_token)
+    remove_state('authentication.setup')
 
 
 @when_not('kube-control.connected')
@@ -681,19 +701,37 @@ def build_kubeconfig(server):
         check_call(cmd)
 
 
-def create_kubeconfig(kubeconfig, server, ca, key, certificate, user='ubuntu',
-                      context='juju-context', cluster='juju-cluster'):
+def create_kubeconfig(kubeconfig, server, ca, key=None, certificate=None,
+                      user='ubuntu', context='juju-context',
+                      cluster='juju-cluster', password=None, token=None):
     '''Create a configuration for Kubernetes based on path using the supplied
     arguments for values of the Kubernetes server, CA, key, certificate, user
     context and cluster.'''
+    if not key and not certificate and not password and not token:
+        raise ValueError('Missing authentication mechanism.')
+
+    # token and password are mutually exclusive. Error early if both are
+    # present. The developer has requested an impossible situation.
+    # see: kubectl config set-credentials --help
+    if token and password:
+        raise ValueError('Token and Password are mutually exclusive.')
     # Create the config file with the address of the master server.
     cmd = 'kubectl config --kubeconfig={0} set-cluster {1} ' \
           '--server={2} --certificate-authority={3} --embed-certs=true'
     check_call(split(cmd.format(kubeconfig, cluster, server, ca)))
     # Create the credentials using the client flags.
-    cmd = 'kubectl config --kubeconfig={0} set-credentials {1} ' \
-          '--client-key={2} --client-certificate={3} --embed-certs=true'
-    check_call(split(cmd.format(kubeconfig, user, key, certificate)))
+    cmd = 'kubectl config --kubeconfig={0} ' \
+          'set-credentials {1} '.format(kubeconfig, user)
+
+    if key and certificate:
+        cmd = '{0} --client-key={1} --client-certificate={2} '\
+              '--embed-certs=true'.format(cmd, key, certificate)
+    if password:
+        cmd = "{0} --username={1} --password={1}".format(cmd, user, password)
+    # This is mutually exclusive from password. They will not work together.
+    if token:
+        cmd = "{0} --token={1}".format(cmd, token)
+    check_call(split(cmd))
     # Create a default context with the cluster.
     cmd = 'kubectl config --kubeconfig={0} set-context {1} ' \
           '--cluster={2} --user={3}'
@@ -790,6 +828,7 @@ def configure_master_services():
     api_opts.add('insecure-bind-address', '127.0.0.1')
     api_opts.add('insecure-port', '8080')
     api_opts.add('storage-backend', 'etcd2')  # FIXME: add etcd3 support
+    api_opts.add('authorization-mode', hookenv.config('authorization-mode'))
     admission_control = [
         'NamespaceLifecycle',
         'LimitRanger',
@@ -809,6 +848,10 @@ def configure_master_services():
     controller_opts.add('root-ca-file', ca_cert_path)
     controller_opts.add('logtostderr', 'true')
     controller_opts.add('master', 'http://127.0.0.1:8080')
+    # TODO: Why doesn't this work w/ the snap config command
+    # Required for RBAC core control loops
+    # https://kubernetes.io/docs/admin/authorization/rbac/#controller-roles
+    # controller_opts.add('use-service-account-credentials', None)
 
     scheduler_opts.add('v', '2')
     scheduler_opts.add('logtostderr', 'true')
@@ -825,27 +868,70 @@ def configure_master_services():
     check_call(cmd)
 
 
-def setup_basic_auth(username='admin', password='admin', user='admin'):
+def setup_basic_auth(username='admin', password='admin', user='admin',
+                     groups=None):
     '''Create the htacces file and the tokens.'''
     root_cdk = '/root/cdk'
     if not os.path.isdir(root_cdk):
         os.makedirs(root_cdk)
     htaccess = os.path.join(root_cdk, 'basic_auth.csv')
+    # format password,user,uid,"group1,group2,group3"
     with open(htaccess, 'w') as stream:
-        stream.write('{0},{1},{2}'.format(username, password, user))
+        if groups:
+            stream.write('{0},{1},{2},"{3}"'.format(password, username, user,
+                                                    groups))
+        else:
+            stream.write('{0},{1},{2}'.format(password, username, user))
 
 
-def setup_tokens(token, username, user):
+def get_token(username):
+    """Grab a token from the static file if present. """
+    root_cdk = '/root/cdk'
+    if not os.path.isdir(root_cdk):
+        os.makedirs(root_cdk)
+    known_tokens = os.path.join(root_cdk, 'known_tokens.csv')
+    token_data = []
+    with open(known_tokens, 'r') as stream:
+        token_data = stream.readlines()
+    for line in token_data:
+        if username in line:
+            fields = line.split(',')
+            return fields[0]
+
+
+def setup_tokens(token, username, user, groups=None):
     '''Create a token file for kubernetes authentication.'''
     root_cdk = '/root/cdk'
     if not os.path.isdir(root_cdk):
         os.makedirs(root_cdk)
     known_tokens = os.path.join(root_cdk, 'known_tokens.csv')
     if not token:
-        alpha = string.ascii_letters + string.digits
-        token = ''.join(random.SystemRandom().choice(alpha) for _ in range(32))
+        token = token_generator(32)
     with open(known_tokens, 'a') as stream:
-        stream.write('{0},{1},{2}\n'.format(token, username, user))
+        if groups:
+            stream.write('{0},{1},{2},"{3}"\n'.format(token, username, user,
+                                                      groups))
+        else:
+            stream.write('{0},{1},{2}\n'.format(token, username, user))
+
+
+def token_generator(length=32, save_salt=None):
+    ''' Generate a random token for use in passwords and account tokens.
+
+    param: length - the length of the token to generate
+    param: save_salt - the key to store the value of the token. Will Override
+    and return the saved_salt if specified.'''
+    alpha = string.ascii_letters + string.digits
+    token = ''.join(random.SystemRandom().choice(alpha) for _ in range(length))
+
+    if save_salt:
+        db = unitdata.kv()
+        if not db.get(save_salt):
+            db.set(save_salt, token)
+        else:
+            return db.get(save_salt)
+
+    return token
 
 
 @retry(times=3, delay_secs=10)
@@ -874,3 +960,10 @@ def apiserverVersion():
     cmd = 'kube-apiserver --version'.split()
     version_string = check_output(cmd).decode('utf-8')
     return tuple(int(q) for q in re.findall("[0-9]+", version_string)[:3])
+
+
+def touch(fname):
+    try:
+        os.utime(fname, None)
+    except OSError:
+        open(fname, 'a').close()
