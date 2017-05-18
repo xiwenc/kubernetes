@@ -304,7 +304,7 @@ def watch_for_changes(kube_api, kube_control, cni):
       'tls_client.ca.saved', 'tls_client.client.certificate.saved',
       'tls_client.client.key.saved', 'tls_client.server.certificate.saved',
       'tls_client.server.key.saved', 'kube-control.dns.available',
-      'cni.available', 'kubernetes-worker.restart-needed')
+      'cni.available', 'kubernetes-worker.restart-needed', 'worker.auth.saved')
 def start_worker(kube_api, kube_control, cni):
     ''' Start kubelet using the provided API and DNS info.'''
     servers = get_kube_api_servers(kube_api)
@@ -314,6 +314,8 @@ def start_worker(kube_api, kube_control, cni):
     # the correct DNS even though the server isn't ready yet.
 
     dns = kube_control.get_dns()
+    creds = kube_control.get_auth_credentials()
+    client_token = creds['client_token']
     cluster_cidr = cni.get_config()['cidr']
 
     if cluster_cidr is None:
@@ -323,7 +325,7 @@ def start_worker(kube_api, kube_control, cni):
     # set --allow-privileged flag for kubelet
     set_privileged()
 
-    create_config(random.choice(servers))
+    create_config(random.choice(servers), client_token)
     configure_worker_services(servers, dns, cluster_cidr)
     set_state('kubernetes-worker.config.created')
     restart_unit_services()
@@ -428,7 +430,7 @@ def arch():
     return architecture
 
 
-def create_config(server):
+def create_config(server, client_token):
     '''Create a kubernetes configuration for the worker unit.'''
     # Get the options from the tls-client layer.
     layer_options = layer.options('tls-client')
@@ -438,16 +440,16 @@ def create_config(server):
     cert = layer_options.get('client_certificate_path')
 
     # Create kubernetes configuration in the default location for ubuntu.
-    create_kubeconfig('/home/ubuntu/.kube/config', server, ca, key, cert,
+    create_kubeconfig('/home/ubuntu/.kube/config', server, ca, token=client_token,
                       user='ubuntu')
     # Make the config dir readable by the ubuntu users so juju scp works.
     cmd = ['chown', '-R', 'ubuntu:ubuntu', '/home/ubuntu/.kube']
     check_call(cmd)
     # Create kubernetes configuration in the default location for root.
-    create_kubeconfig('/root/.kube/config', server, ca, key, cert,
+    create_kubeconfig('/root/.kube/config', server, ca, token=client_token,
                       user='root')
     # Create kubernetes configuration for kubelet, and kube-proxy services.
-    create_kubeconfig(kubeconfig_path, server, ca, key, cert,
+    create_kubeconfig(kubeconfig_path, server, ca, token=client_token,
                       user='kubelet')
 
 
@@ -786,7 +788,10 @@ def request_kubelet_and_proxy_credentials(kube_control):
     kube_control.set_auth_request(nodeuser)
 
 
-@when('kube-control.auth.available', 'kube-api-endpoint.available')
+@when('kube-control.auth.available', 'kube-api-endpoint.available',
+      'tls_client.ca.saved', 'tls_client.client.certificate.saved',
+      'tls_client.client.key.saved', 'tls_client.server.certificate.saved',
+      'tls_client.server.key.saved')
 @when_not('worker.auth.saved')
 def render_service_auth_templates(kube_control, kube_api):
     """Render the authentication templates for kubelet and kube-proxy.

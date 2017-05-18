@@ -360,8 +360,13 @@ def create_service_configs(kube_control):
         setup_tokens(None, 'system:kube-proxy', 'kube-proxy', "kube-proxy")
         proxy_token = get_token('kube-proxy')
 
+    client_token = get_token('cluster-admin')
+    if not client_token:
+        setup_tokens(None, 'cluster-admin', 'cluster-admin', "system:masters")
+        client_token = get_token('cluster-admin')
+
     # Send the data
-    kube_control.sign_auth_request(kubelet_token, proxy_token)
+    kube_control.sign_auth_request(kubelet_token, proxy_token, client_token)
     remove_state('authentication.setup')
 
 
