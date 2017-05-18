@@ -357,7 +357,7 @@ def create_service_configs(kube_control):
     setup_tokens(kubelet_token, user, userid, "system:nodes")
     proxy_token = get_token('kube-proxy')
     if not proxy_token:
-        setup_tokens(None, 'kube-proxy', 'kube-proxy', "kube-proxy")
+        setup_tokens(None, 'system:kube-proxy', 'kube-proxy', "kube-proxy")
         proxy_token = get_token('kube-proxy')
 
     # Send the data
