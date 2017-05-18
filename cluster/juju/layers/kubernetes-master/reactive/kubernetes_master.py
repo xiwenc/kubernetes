@@ -192,9 +192,11 @@ def setup_leader_authentication():
             # Default system user. with full access to the cluster.
             setup_basic_auth(username='admin', groups='system:masters',
                              password=token_generator(32, 'admintoken'),
-                             userid='admin')
+                             user='admin')
         # Generate the default service account token key
         os.makedirs('/root/cdk', exist_ok=True)
+        if not os.path.isfile(known_tokens):
+            touch(known_tokens)
         if not os.path.isfile(service_key):
             cmd = ['openssl', 'genrsa', '-out', service_key,
                    '2048']
@@ -958,3 +960,10 @@ def apiserverVersion():
     cmd = 'kube-apiserver --version'.split()
     version_string = check_output(cmd).decode('utf-8')
     return tuple(int(q) for q in re.findall("[0-9]+", version_string)[:3])
+
+
+def touch(fname):
+    try:
+        os.utime(fname, None)
+    except OSError:
+        open(fname, 'a').close()

@@ -84,7 +84,7 @@ class FlagManager:
 
     def remove(self, key, value):
         '''
-        Remove a flag value from the DockerOpts manager
+        Remove a flag value from the flag manager
         Assuming the data is currently {'foo': ['bar', 'baz']}
         d.remove('foo', 'bar')
         > {'foo': ['baz']}
@@ -98,7 +98,7 @@ class FlagManager:
         '''
         Destructively remove all values and key from the FlagManager
         Assuming the data is currently {'foo': ['bar', 'baz']}
-        d.wipe('foo')
+        d.destroy('foo')
         >{}
         :params key:
         :params strict:

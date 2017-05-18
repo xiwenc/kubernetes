@@ -461,7 +461,6 @@ def configure_worker_services(api_servers, dns, cluster_cidr):
 
     kubelet_opts = FlagManager('kubelet')
     kubelet_opts.add('require-kubeconfig', 'true')
-    kubelet_opts.add('kubeconfig', kubeconfig_path)
     kubelet_opts.add('network-plugin', 'cni')
     kubelet_opts.add('logtostderr', 'true')
     kubelet_opts.add('v', '0')
@@ -476,7 +475,6 @@ def configure_worker_services(api_servers, dns, cluster_cidr):
 
     kube_proxy_opts = FlagManager('kube-proxy')
     kube_proxy_opts.add('cluster-cidr', cluster_cidr)
-    kube_proxy_opts.add('kubeconfig', kubeconfig_path)
     kube_proxy_opts.add('logtostderr', 'true')
     kube_proxy_opts.add('v', '0')
     kube_proxy_opts.add('master', random.choice(api_servers), strict=True)
@@ -487,19 +485,37 @@ def configure_worker_services(api_servers, dns, cluster_cidr):
     check_call(cmd)
 
 
-def create_kubeconfig(kubeconfig, server, ca, key, certificate, user='ubuntu',
-                      context='juju-context', cluster='juju-cluster'):
+def create_kubeconfig(kubeconfig, server, ca, key=None, certificate=None,
+                      user='ubuntu', context='juju-context',
+                      cluster='juju-cluster', password=None, token=None):
     '''Create a configuration for Kubernetes based on path using the supplied
     arguments for values of the Kubernetes server, CA, key, certificate, user
     context and cluster.'''
+    if not key and not certificate and not password and not token:
+        raise ValueError('Missing authentication mechanism.')
+
+    # token and password are mutually exclusive. Error early if both are
+    # present. The developer has requested an impossible situation.
+    # see: kubectl config set-credentials --help
+    if token and password:
+        raise ValueError('Token and Password are mutually exclusive.')
     # Create the config file with the address of the master server.
     cmd = 'kubectl config --kubeconfig={0} set-cluster {1} ' \
           '--server={2} --certificate-authority={3} --embed-certs=true'
     check_call(split(cmd.format(kubeconfig, cluster, server, ca)))
     # Create the credentials using the client flags.
-    cmd = 'kubectl config --kubeconfig={0} set-credentials {1} ' \
-          '--client-key={2} --client-certificate={3} --embed-certs=true'
-    check_call(split(cmd.format(kubeconfig, user, key, certificate)))
+    cmd = 'kubectl config --kubeconfig={0} ' \
+          'set-credentials {1} '.format(kubeconfig, user)
+
+    if key and certificate:
+        cmd = '{0} --client-key={1} --client-certificate={2} '\
+              '--embed-certs=true'.format(cmd, key, certificate)
+    if password:
+        cmd = "{0} --username={1} --password={1}".format(cmd, user, password)
+    # This is mutually exclusive from password. They will not work together.
+    if token:
+        cmd = "{0} --token={1}".format(cmd, token)
+    check_call(split(cmd))
     # Create a default context with the cluster.
     cmd = 'kubectl config --kubeconfig={0} set-context {1} ' \
           '--cluster={2} --user={3}'
@@ -770,12 +786,32 @@ def request_kubelet_and_proxy_credentials(kube_control):
     kube_control.set_auth_request(nodeuser)
 
 
-@when('kube-control.auth.available')
-def render_service_auth_templates(kube_control):
+@when('kube-control.auth.available', 'kube-api-endpoint.available')
+@when_not('worker.auth.saved')
+def render_service_auth_templates(kube_control, kube_api):
     """Render the authentication templates for kubelet and kube-proxy.
 
     """
-    pass
+    creds = kube_control.get_auth_credentials()
+    server = random.choice(get_kube_api_servers(kube_api))
+    nodeuser = 'system:node:{}'.format(gethostname())
+
+    create_kubeconfig('/root/cdk/kubeletconfig', server, ca='/root/cdk/ca.crt',
+                      user=nodeuser, token=creds['kubelet_token'])
+    create_kubeconfig('/root/cdk/kubeproxyconfig', server, user='kube-proxy',
+                      ca='/root/cdk/ca.crt', token=creds['proxy_token'])
+
+    proxy_opts = FlagManager('kube-proxy')
+    kubelet_opts = FlagManager('kubelet')
+
+    proxy_opts.destroy('kubeconfig')
+    proxy_opts.add('kubeconfig', '/root/cdk/kubeproxyconfig')
+
+    kubelet_opts.destroy('kubeconfig')
+    kubelet_opts.add('kubeconfig', '/root/cdk/kubeletconfig')
+
+    set_state('kubernetes-worker.restart-needed')
+    set_state('worker.auth.saved')
 
 
 @when_not('kube-control.connected')
