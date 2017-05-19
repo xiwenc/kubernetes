@@ -353,8 +353,11 @@ def create_service_configs(kube_control):
     """Create the users for kubelet and kube-proxy """
     # generate the username/pass for the requesting unit
     userid, user = kube_control.auth_user()
-    kubelet_token = token_generator(64, user)
-    setup_tokens(kubelet_token, user, userid, "system:nodes")
+    kubelet_token = get_token(user)
+    if not kubelet_token:
+        kubelet_token = token_generator(64, user)
+        setup_tokens(kubelet_token, user, userid, "system:nodes")
+
     proxy_token = get_token('kube-proxy')
     if not proxy_token:
         setup_tokens(None, 'system:kube-proxy', 'kube-proxy', "kube-proxy")
@@ -939,7 +942,7 @@ def token_generator(length=32, save_salt=None):
     return token
 
 
-@retry(times=3, delay_secs=10)
+@retry(times=4, delay_secs=30)
 def all_kube_system_pods_running():
     ''' Check pod status in the kube-system namespace. Returns True if all
     pods are running, False otherwise. '''
