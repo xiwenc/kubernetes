@@ -461,6 +461,18 @@ def addons_ready():
     Returns: True is the addons got applied
 
     """
+    # Create the cluster role binding for the default service account in
+    # the kube-system namespace. This gives the SA SU - this needs to be
+    # refactored to least privleged access.
+    try:
+        template_path = os.path.join(os.getenv('CHARM_DIR'), 'templates',
+                                     'kube-system-rbac.yaml')
+        check_call(['/snap/bin/kubectl', 'apply', '-f', template_path])
+    except CalledProcessError:
+        hookenv.log('Failed to apply kube-system rbac role for addons. '
+                    'Addons likely wont work.')
+        return False
+
     try:
         check_call(['cdk-addons.apply'])
         return True
