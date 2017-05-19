@@ -702,8 +702,12 @@ def build_kubeconfig(server):
             return
         # Create an absolute path for the kubeconfig file.
         kubeconfig_path = os.path.join(os.sep, 'home', 'ubuntu', 'config')
+        client_token = get_token('cluster-admin')
+        if not client_token:
+            setup_tokens(None, 'cluster-admin', 'cluster-admin', "system:masters")
+            client_token = get_token('cluster-admin')
         # Create the kubeconfig on this system so users can access the cluster.
-        create_kubeconfig(kubeconfig_path, server, ca, key, cert)
+        create_kubeconfig(kubeconfig_path, server, ca, token=client_token)
         # Make the config file readable by the ubuntu users so juju scp works.
         cmd = ['chown', 'ubuntu:ubuntu', kubeconfig_path]
         check_call(cmd)
