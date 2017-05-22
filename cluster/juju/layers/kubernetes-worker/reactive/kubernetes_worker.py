@@ -301,9 +301,8 @@ def watch_for_changes(kube_api, kube_control, cni):
 
 
 @when('kubernetes-worker.snaps.installed', 'kube-api-endpoint.available',
-      'tls_client.ca.saved', 'tls_client.client.certificate.saved',
-      'tls_client.client.key.saved', 'tls_client.server.certificate.saved',
-      'tls_client.server.key.saved', 'kube-control.dns.available',
+      'tls_client.ca_installed', 'kube-control.dns.available',
+      'tls_client.server.certificate.saved', 'tls_client.server.key.saved'
       'cni.available', 'kubernetes-worker.restart-needed', 'worker.auth.saved')
 def start_worker(kube_api, kube_control, cni):
     ''' Start kubelet using the provided API and DNS info.'''
@@ -436,8 +435,6 @@ def create_config(server, client_token):
     layer_options = layer.options('tls-client')
     # Get all the paths to the tls information required for kubeconfig.
     ca = layer_options.get('ca_certificate_path')
-    key = layer_options.get('client_key_path')
-    cert = layer_options.get('client_certificate_path')
 
     # Create kubernetes configuration in the default location for ubuntu.
     create_kubeconfig('/home/ubuntu/.kube/config', server, ca, token=client_token,
@@ -789,9 +786,7 @@ def request_kubelet_and_proxy_credentials(kube_control):
 
 
 @when('kube-control.auth.available', 'kube-api-endpoint.available',
-      'tls_client.ca.saved', 'tls_client.client.certificate.saved',
-      'tls_client.client.key.saved', 'tls_client.server.certificate.saved',
-      'tls_client.server.key.saved')
+      'tls_client.ca_installed')
 @when_not('worker.auth.saved')
 def render_service_auth_templates(kube_control, kube_api):
     """Render the authentication templates for kubelet and kube-proxy.
