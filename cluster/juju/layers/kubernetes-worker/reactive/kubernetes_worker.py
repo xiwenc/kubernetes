@@ -302,7 +302,7 @@ def watch_for_changes(kube_api, kube_control, cni):
 
 @when('kubernetes-worker.snaps.installed', 'kube-api-endpoint.available',
       'tls_client.ca_installed', 'kube-control.dns.available',
-      'tls_client.server.certificate.saved', 'tls_client.server.key.saved'
+      'tls_client.server.certificate.saved', 'tls_client.server.key.saved',
       'cni.available', 'kubernetes-worker.restart-needed', 'worker.auth.saved')
 def start_worker(kube_api, kube_control, cni):
     ''' Start kubelet using the provided API and DNS info.'''
