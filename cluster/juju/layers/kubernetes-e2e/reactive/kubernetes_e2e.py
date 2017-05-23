@@ -47,7 +47,9 @@ def messaging():
 
     missing_services = []
     if not is_state('kubernetes-master.available'):
-        missing_services.append('kubernetes-master')
+        missing_services.append('kubernetes-master:kube-api-endpoint')
+    if not is_state('kube-control.connected'):
+        missing_services.append('kubernetes-master:kube-control')
     if not is_state('certificates.available'):
         missing_services.append('certificates')
 
@@ -132,21 +134,6 @@ def set_app_version():
     git_version = version.split('GitVersion:"v')[-1]
     version_from = git_version.split('",')[0]
     hookenv.application_version_set(version_from.rstrip())
-
-
-@when_not('kube-control.connected')
-def missing_kube_control():
-    """Inform the operator they need to add the kube-control relation.
-
-    If deploying via bundle this won't happen, but if operator is upgrading a
-    a charm in a deployment that pre-dates the kube-control relation, it'll be
-    missing.
-
-    """
-    hookenv.status_set(
-        'blocked',
-        'Relate {}:kube-control kubernetes-master:kube-control'.format(
-            hookenv.service_name()))
 
 
 def create_kubeconfig(kubeconfig, server, ca, key=None, certificate=None,
