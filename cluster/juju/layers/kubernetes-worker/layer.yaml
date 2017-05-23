@@ -28,3 +28,4 @@ options:
     server_key_path: '/root/cdk/server.key'
     client_certificate_path: '/root/cdk/client.crt'
     client_key_path: '/root/cdk/client.key'
+
