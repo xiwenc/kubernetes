@@ -352,11 +352,11 @@ def send_cluster_dns_detail(kube_control):
 def create_service_configs(kube_control):
     """Create the users for kubelet and kube-proxy """
     # generate the username/pass for the requesting unit
-    userid, user = kube_control.auth_user()
-    kubelet_token = get_token(user)
+    userid, usermap = kube_control.auth_user()
+    kubelet_token = get_token(usermap['user'])
     if not kubelet_token:
-        kubelet_token = token_generator(64, user)
-        setup_tokens(kubelet_token, user, userid, "system:nodes")
+        kubelet_token = token_generator(64, usermap['user'])
+        setup_tokens(kubelet_token, usermap['user'], userid, usermap['group'])
 
     proxy_token = get_token('kube-proxy')
     if not proxy_token:

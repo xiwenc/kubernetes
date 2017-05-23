@@ -3,6 +3,7 @@ includes:
   - layer:basic
   - layer:tls-client
   - layer:snap
+  - interface:kube-control
   - interface:http
 options:
   tls-client:
