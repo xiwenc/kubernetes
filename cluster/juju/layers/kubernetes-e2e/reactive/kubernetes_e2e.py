@@ -29,7 +29,6 @@ from shlex import split
 
 from subprocess import check_call
 from subprocess import check_output
-from socket import gethostname
 
 import random
 
@@ -88,8 +87,7 @@ def request_kubelet_and_proxy_credentials(kube_control):
     """ Request kubelet node authorization with a well formed kubelet user.
     This also implies that we are requesting kube-proxy auth. """
 
-    nodeuser = 'e2e-'.format(gethostname())
-    kube_control.set_auth_request(nodeuser, group='system:masters')
+    kube_control.set_auth_request('e2e', group='system:masters')
 
 
 @when('tls_client.ca_installed', 'kubernetes-master.available',
