@@ -373,6 +373,26 @@ def create_service_configs(kube_control):
     remove_state('authentication.setup')
 
 
+@when('kube-control.departed')
+@when('leadership.is_leader')
+def flush_auth_for_departed(kube_control):
+    ''' Unit has left the cluster and needs to have its authentication
+    tokens removed from the token registry '''
+    token_auth_file = '/root/cdk/known_tokens.csv'
+    departing_unit = kube_control.flush_departed()
+    known_tokens = open(token_auth_file, 'r').readlines()
+    for line in known_tokens:
+        if departing_unit in line:
+            hookenv.log('Found unit {} in token auth. Removing auth token.')
+            known_tokens.remove(line)
+    # atomically rewrite the file minus any scrubbed units
+    hookenv.log('Rewriting tokena auth file.')
+    with open(token_auth_file, 'w') as fp:
+        fp.writelines(known_tokens)
+    # Trigger rebroadcast of auth files for followers
+    remove_state('autentication.setup')
+
+
 @when_not('kube-control.connected')
 def missing_kube_control():
     """Inform the operator they need to add the kube-control relation.
@@ -716,7 +736,8 @@ def build_kubeconfig(server):
         kubeconfig_path = os.path.join(os.sep, 'home', 'ubuntu', 'config')
         client_token = get_token('cluster-admin')
         if not client_token:
-            setup_tokens(None, 'cluster-admin', 'cluster-admin', "system:masters")
+            setup_tokens(None, 'cluster-admin', 'cluster-admin',
+                         "system:masters")
             client_token = get_token('cluster-admin')
         # Create the kubeconfig on this system so users can access the cluster.
         create_kubeconfig(kubeconfig_path, server, ca, token=client_token)
