@@ -381,12 +381,16 @@ def flush_auth_for_departed(kube_control):
     token_auth_file = '/root/cdk/known_tokens.csv'
     departing_unit = kube_control.flush_departed()
     known_tokens = open(token_auth_file, 'r').readlines()
-    for line in known_tokens:
-        if departing_unit in line:
+    for line in known_tokens[:]:
+        haystack = line.split(',')
+        # skip the entry if we dont have token,user,id,groups format
+        if len(haystack) < 4:
+            continue
+        if haystack[2] == departing_unit:
             hookenv.log('Found unit {} in token auth. Removing auth token.')
             known_tokens.remove(line)
     # atomically rewrite the file minus any scrubbed units
-    hookenv.log('Rewriting tokena auth file.')
+    hookenv.log('Rewriting token auth file: {}'.format(token_auth_file))
     with open(token_auth_file, 'w') as fp:
         fp.writelines(known_tokens)
     # Trigger rebroadcast of auth files for followers
