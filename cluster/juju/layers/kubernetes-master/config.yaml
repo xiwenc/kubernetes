@@ -30,3 +30,7 @@ options:
     type: string
     default: "RBAC"
     description: kube-apiserver --authorization-mode <value>
+  cluster-context:
+    type: string
+    default: "juju-context"
+    description: Clusters context stored on the kubecofig file.
