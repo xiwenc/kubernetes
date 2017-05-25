@@ -710,11 +710,6 @@ def build_kubeconfig(server):
     # Do we have everything we need?
     if ca_exists and key_exists and cert_exists:
         context = hookenv.config('cluster-context')
-        # Cache last server string to know if we need to regenerate the config.
-        # Same for cluster-context.
-        if (not data_changed('kubeconfig.server', server)
-            and not data_changed('kubeconfig.client', context)):
-            return
         # Create an absolute path for the kubeconfig file.
         kubeconfig_path = os.path.join(os.sep, 'home', 'ubuntu', 'config')
         client_token = get_token('cluster-admin')
@@ -722,6 +717,8 @@ def build_kubeconfig(server):
             setup_tokens(None, 'cluster-admin', 'cluster-admin', "system:masters")
             client_token = get_token('cluster-admin')
         context_name = hookenv.config('cluster-context')
+        if context == "":
+            context_name = os.environ['JUJU_MODEL_NAME']
         # Create the kubeconfig on this system so users can access the cluster.
         create_kubeconfig(kubeconfig_path, server, ca, token=client_token,
                           cluster=context_name, context=context_name)

@@ -32,5 +32,6 @@ options:
     description: kube-apiserver --authorization-mode <value>
   cluster-context:
     type: string
-    default: "juju-context"
-    description: Clusters context stored on the kubecofig file.
+    default: ""
+    description: |
+      Clusters context stored on the kubecofig file. Defaults to model's name.
