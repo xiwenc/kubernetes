@@ -433,6 +433,23 @@ def push_api_data(kube_api):
     kube_api.set_api_port('6443')
 
 
+@when('cdk-addons.configured')
+@when('config.changed.enable-coredns')
+def handle_coredns():
+    '''Handle changes in coredns flag'''
+    enable_coredns = hookenv.config('enable-coredns')
+    if enable_coredns == is_state('enable-coredns'):
+        return
+
+    if enable_coredns:
+        set_state('enable-coredns')
+    else:
+        remove_state('enable-coredns')
+
+    # re-configure cdk addons
+    configure_cdk_addons()
+
+
 @when('kubernetes-master.components.started')
 def configure_cdk_addons():
     ''' Configure CDK addons '''
@@ -442,7 +459,8 @@ def configure_cdk_addons():
         'arch=' + arch(),
         'dns-ip=' + get_dns_ip(),
         'dns-domain=' + hookenv.config('dns_domain'),
-        'enable-dashboard=' + dbEnabled
+        'enable-dashboard=' + dbEnabled,
+        'service-cidr=' + service_cidr()
     ]
     check_call(['snap', 'set', 'cdk-addons'] + args)
     if not addons_ready():
@@ -468,13 +486,19 @@ def addons_ready():
         template_path = os.path.join(os.getenv('CHARM_DIR'), 'templates',
                                      'kube-system-rbac.yaml')
         check_call(['/snap/bin/kubectl', 'apply', '-f', template_path])
+        template_path = os.path.join(os.getenv('CHARM_DIR'), 'templates',
+                                     'coredns-rbac-sa.yaml')
+        check_call(['/snap/bin/kubectl', 'apply', '-f', template_path])
     except CalledProcessError:
-        hookenv.log('Failed to apply kube-system rbac role for addons. '
+        hookenv.log('Failed to apply kube-system rbac role for addons.'
                     'Addons likely wont work.')
         return False
 
     try:
-        check_call(['cdk-addons.apply'])
+        cmd = ['cdk-addons.apply']
+        if is_state('enable-coredns'):
+            cmd.append('coredns')
+        check_call(cmd)
         return True
     except CalledProcessError:
         hookenv.log("Addons are not ready yet.")
