@@ -141,6 +141,59 @@ def migrate_from_pre_snaps():
     FlagManager('kube-scheduler').destroy_all()
 
 
+@when_not('pre-rbac-migrated')
+def migrate_rbac_changes():
+    '''Probe the state of the system and take action on identified component
+    changes '''
+    print('banana')
+    machine_state = probe_machine_state()
+    backup_path = '/root/pre-rbac-migration-backup'
+    # Create a backup plan.
+    os.makedirs(backup_path, exist_ok=True)
+
+    if 'apiserver_client_ca' in machine_state.keys():
+        api_args_path = '/var/snap/kube-apiserver/current/args'
+        # create a copy of the args file.
+        backup_file = os.path.join(backup_path, 'kube-apiserver-args')
+        if not os.path.exists(backup_file):
+            hookenv.log('Creating single backup of existing args for api')
+            shutil.copy(api_args_path, backup_file)
+
+        with open(api_args_path, 'r') as fp:
+            arg_lines = fp.readlines()
+
+        with open(api_args_path, 'w') as fp:
+            for idx, line in enumerate(arg_lines[:], start=0):
+                if line.startswith('--client-ca-file'):
+                    arg_lines.pop(idx)
+            fp.writelines(arg_lines)
+
+    remove_state('authentication.setup')
+    remove_state('kubernetes-master.components.started')
+    set_state('pre-rbac-migrated')
+
+
+def probe_machine_state():
+    '''Probe control plane components that were delivered prior to
+    enabling RBAC.
+
+    returns: mstate - a dict of values to react to for the purposes of
+    handling machine state migrations.'''
+
+    # Store all determined states in the mstate dict.
+    mstate = {}
+
+    # Determine if the apiserver is still cert based auth
+    api_args_path = '/var/snap/kube-apiserver/current/args'
+    if os.path.isfile(api_args_path):
+        with open(api_args_path, 'r') as fp:
+            arg_lines = fp.readlines()
+        if '--client-ca-file "/root/cdk/ca.crt"\n' in arg_lines:
+            mstate['apiserver_client_ca'] = True
+
+    return mstate
+
+
 def install_snaps():
     channel = hookenv.config('channel')
     hookenv.status_set('maintenance', 'Installing kubectl snap')
@@ -370,6 +423,7 @@ def create_service_configs(kube_control):
 
     # Send the data
     kube_control.sign_auth_request(kubelet_token, proxy_token, client_token)
+    host.service_restart('snap.kube-apiserver.daemon')
     remove_state('authentication.setup')
 
 

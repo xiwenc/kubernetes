@@ -58,6 +58,7 @@ def upgrade_charm():
     hookenv.atexit(remove_state, 'config.changed.install_from_upstream')
 
     cleanup_pre_snap_services()
+    cleanup_configs_with_tls()
     check_resources_for_upgrade_needed()
 
     # Remove gpu.enabled state so we can reconfigure gpu-related kubelet flags,
@@ -71,6 +72,32 @@ def upgrade_charm():
     remove_state('kubernetes-worker.config.created')
     remove_state('kubernetes-worker.ingress.available')
     set_state('kubernetes-worker.restart-needed')
+
+
+@when_not('ingress.migrated')
+def purge_default_ns_ingress():
+    '''Remove the ingress controller from the default namespace '''
+    # The upgrade-charm event will launch a newer ingress controller that
+    # launches in the kube-system namespace. This will port collide with the
+    # existing nginx controller.
+
+    if not os.path.isfile('/root/.kube/config'):
+        hookenv.log('Missing kubeconfig: will attempt ingress migration later')
+        return
+
+    cmd = ['kubectl', 'get', 'po', '-l', 'name=nginx-ingress-lb']
+    try:
+        raw = check_output(cmd)
+    except CalledProcessError:
+        hookenv.log('Failed to purge the existing ingress controller.')
+        return
+
+    if not raw.startswith(b'No resources'):
+        hookenv.log('Removing default namespace nginx-ingress-controller')
+        cmd = ['kubectl', 'delete', 'rc', 'nginx-ingress-controller']
+        check_call(cmd)
+        cmd = ['kubectl', 'delete', 'rc', 'default-http-backend']
+        set_state('ingress.migrated')
 
 
 def check_resources_for_upgrade_needed():
@@ -88,6 +115,21 @@ def set_upgrade_needed():
     require_manual = config.get('require-manual-upgrade')
     if previous_channel is None or not require_manual:
         set_state('kubernetes-worker.snaps.upgrade-specified')
+
+
+def cleanup_configs_with_tls():
+    '''Rename existing configuration files that used x509 validation for the
+    newer token/basic-auth based configs '''
+    rootpath = '/root/.kube/config'
+    ubuntupath = '/home/ubuntu/.kube/config'
+    systempath = '/root/cdk/kubeconfig'
+
+    if os.path.isfile(rootpath):
+        shutil.move(rootpath, '{}.bak'.format(rootpath))
+    if os.path.isfile(ubuntupath):
+        shutil.move(ubuntupath, '{}.bak'.format(ubuntupath))
+    if os.path.isfile(systempath):
+        shutil.move(systempath, '{}.bak'.format(systempath))
 
 
 def cleanup_pre_snap_services():
@@ -302,7 +344,6 @@ def watch_for_changes(kube_api, kube_control, cni):
 
 @when('kubernetes-worker.snaps.installed', 'kube-api-endpoint.available',
       'tls_client.ca_installed', 'kube-control.dns.available',
-      'tls_client.server.certificate.saved', 'tls_client.server.key.saved',
       'cni.available', 'kubernetes-worker.restart-needed', 'worker.auth.saved')
 def start_worker(kube_api, kube_control, cni):
     ''' Start kubelet using the provided API and DNS info.'''
@@ -324,6 +365,8 @@ def start_worker(kube_api, kube_control, cni):
     # set --allow-privileged flag for kubelet
     set_privileged()
 
+    # required during upgrade-charm sequences to depcreate x509 cert auth
+    cleanup_configs_with_tls()
     create_config(random.choice(servers), client_token)
     configure_worker_services(servers, dns, cluster_cidr)
     set_state('kubernetes-worker.config.created')
@@ -437,8 +480,8 @@ def create_config(server, client_token):
     ca = layer_options.get('ca_certificate_path')
 
     # Create kubernetes configuration in the default location for ubuntu.
-    create_kubeconfig('/home/ubuntu/.kube/config', server, ca, token=client_token,
-                      user='ubuntu')
+    create_kubeconfig('/home/ubuntu/.kube/config', server, ca,
+                      token=client_token, user='ubuntu')
     # Make the config dir readable by the ubuntu users so juju scp works.
     cmd = ['chown', '-R', 'ubuntu:ubuntu', '/home/ubuntu/.kube']
     check_call(cmd)
