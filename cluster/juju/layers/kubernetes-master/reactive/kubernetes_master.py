@@ -460,7 +460,9 @@ def configure_cdk_addons():
         'dns-ip=' + get_dns_ip(),
         'dns-domain=' + hookenv.config('dns_domain'),
         'enable-dashboard=' + dbEnabled,
-        'service-cidr=' + service_cidr()
+        'service-cidr=' + service_cidr(),
+        'coredns-port=' + str(hookenv.config('coredns-port')),
+        'external-dns-server=' + hookenv.config('external-dns-server')
     ]
     check_call(['snap', 'set', 'cdk-addons'] + args)
     if not addons_ready():

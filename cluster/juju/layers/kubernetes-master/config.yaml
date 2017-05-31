@@ -7,10 +7,18 @@ options:
     type: boolean
     default: False
     description: Deploy CoreDNS in place of KubeDNS
+  coredns-port:
+    type: int
+    default: 30053
+    description: NodePort used to expose CoreDNS
   dns_domain:
     type: string
     default: cluster.local
     description: The local domain for cluster dns
+  external-dns-server:
+    type: string
+    default: ""
+    description: Additional DNS servers to be queried for service discovery.
   service-cidr:
     type: string
     default: 10.152.183.0/24
