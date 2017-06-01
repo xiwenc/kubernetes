@@ -74,6 +74,7 @@ def upgrade_charm():
     set_state('kubernetes-worker.restart-needed')
 
 
+@when('worker.auth.saved')
 @when_not('ingress.migrated')
 def purge_default_ns_ingress():
     '''Remove the ingress controller from the default namespace '''
@@ -81,11 +82,8 @@ def purge_default_ns_ingress():
     # launches in the kube-system namespace. This will port collide with the
     # existing nginx controller.
 
-    if not os.path.isfile('/root/.kube/config'):
-        hookenv.log('Missing kubeconfig: will attempt ingress migration later')
-        return
-
-    cmd = ['kubectl', 'get', 'po', '-l', 'name=nginx-ingress-lb']
+    cmd = ['kubectl', '--kubeconfig', kubeconfig_path, 'get',
+           'rc', '-l', 'k8s-app=nginx-ingress-lb']
     try:
         raw = check_output(cmd)
     except CalledProcessError:
@@ -94,9 +92,12 @@ def purge_default_ns_ingress():
 
     if not raw.startswith(b'No resources'):
         hookenv.log('Removing default namespace nginx-ingress-controller')
-        cmd = ['kubectl', 'delete', 'rc', 'nginx-ingress-controller']
-        check_call(cmd)
-        cmd = ['kubectl', 'delete', 'rc', 'default-http-backend']
+        niccmd = ['kubectl', '--kubeconfig', kubeconfig_path, 'delete',
+                  'rc', 'nginx-ingress-controller']
+        check_call(niccmd)
+        dhbcmd = ['kubectl', '--kubeconfig', kubeconfig_path, 'delete',
+                  'rc', 'default-http-backend']
+        check_call(dhbcmd)
         set_state('ingress.migrated')
 
 
