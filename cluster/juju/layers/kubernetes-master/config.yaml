@@ -19,6 +19,10 @@ options:
     type: string
     default: ""
     description: Additional DNS servers to be queried for service discovery.
+  federation:
+    type: string
+    default: ""
+    description: Tuple of the form <federation-name>=<federation-zone>
   service-cidr:
     type: string
     default: 10.152.183.0/24
