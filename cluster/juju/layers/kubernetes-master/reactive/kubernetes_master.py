@@ -36,6 +36,21 @@ from charmhelpers.core.host import service_stop
 from charmhelpers.contrib.charmsupport import nrpe
 
 
+# 'kubernetes-master.upgrade-needed' an upgrade is ongoing
+# 'kubernetes-master.upgrade-specified' upgrade should continue without the need to call the upgrade action OR the upgrade action is already called
+# 'kubernetes.components.installed' unused
+# 'kubernetes.dashboard.available' unused
+# 'kube-dns.available' unused
+# 'kubernetes-master.app_version.set' unused
+# 'reconfigure.authentication.setup' this state is set when we trigger the configurating of the authorization facilities and signals that this is not the first time we configure auth.
+# 'authentication.setup' the authorisation configuration is done
+# 'kubernetes-master.components.started' all components of master have started. Remove this to cause a restart of the master
+# 'client.password.initialised' password initialsed and different from "" aka set to random
+# 'cdk-addons.configured' configured and running
+# 'kubernetes-master.snaps.installed' snaps are installed
+# 'kube-controller-manager.do-restart' cause a restart to controller manager
+# 'kube-apiserver.do-restart' cause a restart of api server
+# 'kube-scheduler.do-restart' cause a restart of scheduler
 
 def set_upgrade_needed():
     set_state('kubernetes-master.upgrade-needed')
