@@ -1,4 +1,6 @@
-# Copyright 2016 The Kubernetes Authors.
+#!/bin/sh
+
+# Copyright 2018 The Kubernetes Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,23 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# CEPH all in one
-# Based on image by Ricardo Rocha, ricardo@catalyst.net.nz
+echo "Generating self-signed cert"
+mkdir -p /certs
+openssl req -x509 -sha256 -nodes -days 365 -newkey rsa:2048 \
+-keyout /certs/privateKey.key \
+-out /certs/certificate.crt \
+-subj "/C=UK/ST=Warwickshire/L=Leamington/O=OrgName/OU=IT Department/CN=example.com"
 
-FROM fedora:26
-
-# Base Packages
-RUN yum install -y wget strace psmisc procps-ng ceph ceph-fuse && yum clean all
-
-# Get ports exposed
-EXPOSE 6789
-
-ADD ./bootstrap.sh /bootstrap.sh
-ADD ./mon.sh /mon.sh
-ADD ./mds.sh /mds.sh
-ADD ./osd.sh /osd.sh
-ADD ./ceph.conf.sh /ceph.conf.sh
-ADD ./keyring /var/lib/ceph/mon/keyring
-ADD ./block.tar.gz /
-
-CMD /bootstrap.sh
+echo "Starting nginx"
+nginx -g "daemon off;"

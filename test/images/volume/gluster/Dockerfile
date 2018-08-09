@@ -12,19 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-TAG = 0.8
-PREFIX = gcr.io/kubernetes-e2e-test-images
+FROM BASEIMAGE
 
-all: push
+CROSS_BUILD_COPY qemu-QEMUARCH-static /usr/bin/
 
-container: image
+RUN yum -y install hostname glusterfs-server && yum clean all
+ADD glusterd.vol /etc/glusterfs/
+ADD run_gluster.sh /usr/local/bin/
+ADD index.html /vol/
+RUN chmod 644 /vol/index.html
 
-image:
-	docker build --pull -t $(PREFIX)/volume-nfs . # Build new image and automatically tag it as latest
-	docker tag $(PREFIX)/volume-nfs $(PREFIX)/volume-nfs:$(TAG) # Add the version tag to the latest image
+EXPOSE 24007/tcp 49152/tcp
 
-push: image
-	docker push $(PREFIX)/volume-nfs # Push image tagged as latest to repository
-	docker push $(PREFIX)/volume-nfs:$(TAG) # Push version tagged image to repository (since this image is already pushed it will simply create or update version tag)
-
-clean:
+ENTRYPOINT ["/usr/local/bin/run_gluster.sh"]

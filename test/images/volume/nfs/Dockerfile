@@ -12,13 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM fedora:26
-RUN yum -y install hostname glusterfs-server && yum clean all
-ADD glusterd.vol /etc/glusterfs/
-ADD run_gluster.sh /usr/local/bin/
-ADD index.html /vol/
-RUN chmod 644 /vol/index.html
+FROM BASEIMAGE
 
-EXPOSE 24007/tcp 49152/tcp
+CROSS_BUILD_COPY qemu-QEMUARCH-static /usr/bin/
+RUN yum -y install /usr/bin/ps nfs-utils && yum clean all
+RUN mkdir -p /exports
+ADD run_nfs.sh /usr/local/bin/
+ADD index.html /tmp/index.html
+RUN chmod 644 /tmp/index.html
 
-ENTRYPOINT ["/usr/local/bin/run_gluster.sh"]
+# mark /exports as a mount point
+VOLUME /exports
+# expose mountd 20048/tcp and nfsd 2049/tcp
+EXPOSE 2049/tcp 20048/tcp
+
+ENTRYPOINT ["/usr/local/bin/run_nfs.sh"]
+CMD ["/exports", "/"]

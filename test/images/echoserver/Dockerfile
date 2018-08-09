@@ -1,4 +1,4 @@
-# Copyright 2016 The Kubernetes Authors.
+# Copyright 2017 The Kubernetes Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,14 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM centos:6
+FROM BASEIMAGE
 
-ADD install.sh /usr/local/bin/
-RUN /usr/local/bin/install.sh 
-ADD init.sh /usr/local/bin/
-ADD index.html /tmp/
-RUN chmod 644 /tmp/index.html
+CROSS_BUILD_COPY qemu-QEMUARCH-static /usr/bin/
 
-EXPOSE 6789/tcp
+RUN apk add --no-cache openssl nginx-mod-http-lua nginx-mod-http-lua-upstream
+RUN mkdir -p /run/nginx
 
-ENTRYPOINT ["/usr/local/bin/init.sh"]
+ADD nginx.conf /etc/nginx/nginx.conf
+ADD template.lua /usr/local/share/lua/5.1/
+ADD README.md README.md
+ADD run.sh /usr/local/bin/run.sh
+RUN chmod +x /usr/local/bin/run.sh
+ENTRYPOINT ["/usr/local/bin/run.sh"]
