@@ -58,7 +58,7 @@ from charmhelpers.contrib.charmsupport import nrpe
 from charms.layer.kubernetes_common import kubeclientconfig_path
 from charms.layer.kubernetes_common import migrate_resource_checksums
 from charms.layer.kubernetes_common import check_resources_for_upgrade_needed
-from charms.layer.kubernetes_common import calculate_and_store_resource_checksums # noqa
+from charms.layer.kubernetes_common import calculate_and_store_resource_checksums  # noqa
 from charms.layer.kubernetes_common import arch
 from charms.layer.kubernetes_common import service_restart
 from charms.layer.kubernetes_common import get_ingress_address
@@ -1689,6 +1689,7 @@ def _write_openstack_snap_config(component):
     lines = [
         '[Global]',
         'auth-url = {}'.format(openstack.auth_url),
+        'region = {}'.format(openstack.region),
         'username = {}'.format(openstack.username),
         'password = {}'.format(openstack.password),
         'tenant-name = {}'.format(openstack.project_name),
@@ -1700,6 +1701,19 @@ def _write_openstack_snap_config(component):
             openstack.endpoint_tls_ca
         ).decode('utf-8'))
         lines.append('ca-file = {}'.format(str(cloud_endpoint_ca_path)))
+    if openstack.subnet_id:
+        lines.append('subnet-id = {}'.format(openstack.subnet_id))
+    if openstack.floating_network_id:
+        lines.append('floating-network-id = {}'.format(
+            openstack.floating_network_id))
+    if openstack.lb_method:
+        lines.append('lb-method = {}'.format(
+            openstack.lb_method))
+    if openstack.manage_security_groups:
+        lines.append('manage-security-groups = {}'.format(
+            openstack.manage_security_groups))
+        lines.append('node-security-group = {}'.format(
+            openstack.node_security_group))
 
     cloud_config_path.write_text('\n'.join(lines))
 
