@@ -1305,7 +1305,7 @@ def _write_openstack_snap_config(component):
         lines.append('node-security-group = {}'.format(
             openstack.node_security_group))
 
-    cloud_config_path.write_text('\n'.join(lines))
+    cloud_config_path.write_text(''.join('{}\n'.format(l) for l in lines))
 
 
 def _write_azure_snap_config(component):
