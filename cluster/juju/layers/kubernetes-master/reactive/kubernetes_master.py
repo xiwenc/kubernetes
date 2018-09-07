@@ -1701,6 +1701,12 @@ def _write_openstack_snap_config(component):
             openstack.endpoint_tls_ca
         ).decode('utf-8'))
         lines.append('ca-file = {}'.format(str(cloud_endpoint_ca_path)))
+    if any([openstack.subnet_id,
+            openstack.floating_network_id,
+            openstack.lb_method,
+            openstack.manage_security_groups]):
+        lines.append('')
+        lines.append('[LoadBalancer]')
     if openstack.subnet_id:
         lines.append('subnet-id = {}'.format(openstack.subnet_id))
     if openstack.floating_network_id:
