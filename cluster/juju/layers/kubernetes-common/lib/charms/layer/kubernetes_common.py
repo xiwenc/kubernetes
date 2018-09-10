@@ -439,8 +439,6 @@ def write_openstack_snap_config(component):
     if openstack.manage_security_groups:
         lines.append('manage-security-groups = {}'.format(
             openstack.manage_security_groups))
-        lines.append('node-security-group = {}'.format(
-            openstack.node_security_group))
 
     comp_cloud_config_path = cloud_config_path(component)
     comp_cloud_config_path.write_text(''.join('{}\n'.format(l) for l in lines))
