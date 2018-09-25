@@ -303,6 +303,13 @@ def create_kubeconfig(kubeconfig, server, ca, key=None, certificate=None,
         cmd = 'kubectl config --kubeconfig={0} ' \
               'set-credentials keystone_user'.format(kubeconfig)
         check_call(split(cmd))
+        cmd = 'kubectl config --kubeconfig={0} ' \
+              'set-context --cluster=juju-cluster ' \
+              '--user=keystone_user keystone'.format(kubeconfig)
+        check_call(split(cmd))
+        cmd = 'kubectl config --kubeconfig={0} ' \
+              'use-context keystone'.format(kubeconfig)
+        check_call(split(cmd))
         # manually add exec command until kubectl can do it for us
         with open(kubeconfig, "r") as f:
             content = f.read()

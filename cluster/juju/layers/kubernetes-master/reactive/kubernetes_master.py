@@ -72,6 +72,7 @@ from charms.layer.kubernetes_common import write_openstack_snap_config
 from charms.layer.kubernetes_common import write_azure_snap_config
 from charms.layer.kubernetes_common import configure_kube_proxy
 from charms.layer.kubernetes_common import kubeproxyconfig_path
+from charms.layer.kubernetes_common import kubectl_manifest
 
 # Override the default nagios shortname regex to allow periods, which we
 # need because our bin names contain them (e.g. 'snap.foo.daemon'). The
@@ -91,6 +92,7 @@ os.environ['PATH'] += os.pathsep + os.path.join(os.sep, 'snap', 'bin')
 db = unitdata.kv()
 checksum_prefix = 'kubernetes-master.resource-checksums.'
 configure_prefix = 'kubernetes-master.prev_args.'
+keystone_root = '/root/cdk/keystone'
 
 
 def set_upgrade_needed(forced=False):
@@ -505,7 +507,7 @@ def set_final_status():
     is_leader = is_state('leadership.is_leader')
     authentication_setup = is_state('authentication.setup')
     if not is_leader and not authentication_setup:
-        hookenv.status_set('waiting', 'Waiting on leaders crypto keys.')
+        hookenv.status_set('waiting', "Waiting on leader's crypto keys.")
         return
 
     components_started = is_state('kubernetes-master.components.started')
@@ -765,7 +767,16 @@ def kick_api_server(tls):
     tls_client.reset_certificate_write_flag('server')
 
 
-@when_any('kubernetes-master.components.started', 'ceph-storage.configured')
+@when('config.changed.keystone-policy',
+      'keystone-credentials.available.auth')
+def regenerate_cdk_addons():
+    configure_cdk_addons()
+
+
+@when_any('kubernetes-master.components.started',
+          'ceph-storage.configured',
+          'keystone-credentials.available.auth',
+          'config.changed.keystone-ssl-ca')
 @when('leadership.is_leader')
 def configure_cdk_addons():
     ''' Configure CDK addons '''
@@ -793,6 +804,20 @@ def configure_cdk_addons():
         ceph['mon_hosts'] = ceph_ep.mon_hosts()
         default_storage = hookenv.config('default-storage')
 
+    keystone = {}
+    ks = endpoint_from_flag('keystone-credentials.available.auth')
+    if ks:
+        keystoneEnabled = "true"
+        keystone['cert'] = '/root/cdk/server.crt'
+        keystone['key'] = '/root/cdk/server.key'
+        keystone['url'] = '{}://{}:{}/v{}'.format(ks.auth_protocol(),
+                                                  ks.auth_host(),
+                                                  ks.auth_port(),
+                                                  ks.api_version())
+        keystone['keystone-ca'] = hookenv.config('keystone-ssl-ca')
+    else:
+        keystoneEnabled = "false"
+
     args = [
         'arch=' + arch(),
         'dns-ip=' + get_deprecated_dns_ip(),
@@ -807,6 +832,11 @@ def configure_cdk_addons():
         'ceph-kubernetes-key=' + (ceph.get('admin_key', '')),
         'ceph-mon-hosts="' + (ceph.get('mon_hosts', '')) + '"',
         'default-storage=' + default_storage,
+        'enable-keystone=' + keystoneEnabled,
+        'keystone-cert-file=' + keystone.get('cert', ''),
+        'keystone-key-file=' + keystone.get('key', ''),
+        'keystone-server-url=' + keystone.get('url', ''),
+        'keystone-server-ca=' + keystone.get('keystone-ca', '')
     ]
     check_call(['snap', 'set', 'cdk-addons'] + args)
     if not addons_ready():
@@ -814,6 +844,10 @@ def configure_cdk_addons():
         return
 
     set_state('cdk-addons.configured')
+    if ks:
+        set_state('keystone.cdk-addons.configured')
+    else:
+        remove_state('keystone.cdk-addons.configured')
 
 
 @retry(times=3, delay_secs=20)
@@ -1026,7 +1060,8 @@ def on_config_allow_privileged_change():
 
 @when_any('config.changed.api-extra-args',
           'config.changed.audit-policy',
-          'config.changed.audit-webhook-config')
+          'config.changed.audit-webhook-config',
+          'config.changed.enable-keystone-authorization')
 @when('kubernetes-master.components.started')
 @when('leadership.set.auto_storage_backend')
 @when('etcd.available')
@@ -1109,12 +1144,39 @@ def build_kubeconfig(server):
     client_pass = get_password('basic_auth.csv', 'admin')
     # Do we have everything we need?
     if ca_exists and client_pass:
+        # drop keystone helper script?
+        ks = endpoint_from_flag('keystone-credentials.available.auth')
+        if ks:
+            keystone_path = os.path.join(os.sep, 'home', 'ubuntu',
+                                         'kube-keystone.sh')
+            with open(keystone_path, "w") as f:
+                lines = [
+                    '# Replace with your public address and port for keystone'
+                    'export OS_AUTH_URL="{}://{}:{}/v{}"'.format(
+                        ks.auth_protocol(),
+                        ks.auth_host(),
+                        ks.auth_port(),
+                        ks.api_version()),
+                    '#export OS_DOMAIN_NAME=k8s',
+                    '#export OS_USERNAME=myuser',
+                    '#export OS_PASSWORD=secure_pw'
+                ]
+                f.write(''.join('{}\n'.format(l) for l in lines))
+        else:
+            hookenv.log('Keystone endpoint not found, will retry.')
+
         # Create an absolute path for the kubeconfig file.
         kubeconfig_path = os.path.join(os.sep, 'home', 'ubuntu', 'config')
         # Create the kubeconfig on this system so users can access the cluster.
 
-        create_kubeconfig(kubeconfig_path, server, ca,
-                          user='admin', password=client_pass)
+        if ks:
+            create_kubeconfig(kubeconfig_path, server, ca,
+                              user='admin', password=client_pass,
+                              keystone=True)
+        else:
+            create_kubeconfig(kubeconfig_path, server, ca,
+                              user='admin', password=client_pass)
+
         # Make the config file readable by the ubuntu users so juju scp works.
         cmd = ['chown', 'ubuntu:ubuntu', kubeconfig_path]
         check_call(cmd)
@@ -1261,6 +1323,31 @@ def configure_apiserver(etcd_connection_string):
     auth_mode = hookenv.config('authorization-mode')
     if 'Node' in auth_mode:
         admission_control.append('NodeRestriction')
+
+    ks = endpoint_from_flag('keystone-credentials.available.auth')
+    ks_ip = get_service_ip('k8s-keystone-auth-service', errors_fatal=False)
+    if ks and ks_ip:
+        os.makedirs(keystone_root, exist_ok=True)
+
+        keystone_webhook = keystone_root + '/webhook.yaml'
+        context = {}
+        context['keystone_service_cluster_ip'] = ks_ip
+        render('keystone-api-server-webhook.yaml', keystone_webhook, context)
+        api_opts['authentication-token-webhook-config-file'] = keystone_webhook
+
+        if hookenv.config('enable-keystone-authorization'):
+            # if user wants authorization, enable it
+            if 'Webhook' not in auth_mode:
+                auth_mode += ",Webhook"
+            api_opts['authorization-webhook-config-file'] = keystone_webhook
+        set_state('keystone.apiserver.configured')
+    else:
+        if ks and not ks_ip:
+            hookenv.log('Unable to find k8s-keystone-auth-service '
+                        'service. Will retry')
+        else:
+            hookenv.log('Unable to find keystone endpoint. Will retry')
+        remove_state('keystone.apiserver.configured')
 
     api_opts['authorization-mode'] = auth_mode
 
@@ -1733,3 +1820,81 @@ def _write_vsphere_snap_config(component):
         '[Disk]',
         'scsicontrollertype = "pvscsi"',
     ]))
+
+
+def _write_azure_snap_config(component):
+    azure = endpoint_from_flag('endpoint.azure.ready')
+    _cloud_config_path = cloud_config_path(component)
+    _cloud_config_path.write_text(json.dumps({
+        'useInstanceMetadata': True,
+        'useManagedIdentityExtension': True,
+        'subscriptionId': azure.subscription_id,
+        'resourceGroup': azure.resource_group,
+        'location': azure.resource_group_location,
+        'vnetName': azure.vnet_name,
+        'vnetResourceGroup': azure.vnet_resource_group,
+        'subnetName': azure.subnet_name,
+        'securityGroupName': azure.security_group_name,
+    }))
+
+
+@when('config.changed.keystone-policy', 'keystone-credentials.available.auth')
+def generate_keystone_configmap():
+    os.makedirs(keystone_root, exist_ok=True)
+
+    keystone_policy_path = keystone_root + '/keystone-policy.yaml'
+    keystone_policy = hookenv.config('keystone-policy')
+    if keystone_policy:
+        write_file_with_autogenerated_header(keystone_policy_path,
+                                             keystone_policy)
+        kubectl_manifest('apply', keystone_policy_path)
+    else:
+        kubectl_manifest('delete', keystone_policy_path)
+        remove_if_exists(keystone_policy_path)
+
+
+@when('keystone-credentials.connected')
+def setup_keystone_user():
+    # This seems silly, but until we request a user from keystone
+    # we don't get information about the keystone server...
+    ks = endpoint_from_flag('keystone-credentials.connected')
+    ks.request_credentials('k8s')
+
+
+@when('keystone.cdk-addons.configured', 'keystone.credentials.configured')
+@when_not('keystone.apiserver.configured')
+def keystone_kick_apiserver():
+    # if we have run configure, but we haven't configured the api server
+    # because the service wasn't up yet, we need to keep trying
+    etcd = endpoint_from_flag('etcd.available')
+    configure_apiserver(etcd.get_connection_string())
+
+
+@when('keystone-credentials.available.auth', 'certificates.ca.available',
+      'certificates.client.cert.available', 'authentication.setup',
+      'keystone.cdk-addons.configured', 'etcd.available')
+def keystone_config():
+    # first, we have to have the service set up before we can render this stuff
+    ks = endpoint_from_flag('keystone-credentials.available.auth')
+    data = {
+        'host': ks.auth_host(),
+        'proto': ks.auth_protocol(),
+        'port': ks.auth_port(),
+        'version': ks.api_version()
+    }
+    if data_changed('keystone', data):
+        remove_state('keystone.credentials.configured')
+
+        # we basically just call the other things we need to update
+        etcd = endpoint_from_flag('etcd.available')
+        lb = endpoint_from_flag('loadbalancer.available')
+        ca = endpoint_from_flag('certificates.ca.available')
+        client = endpoint_from_flag('certificates.client.cert.available')
+
+        configure_apiserver(etcd.get_connection_string())
+        if lb:
+            loadbalancer_kubeconfig(lb, ca, client)
+        else:
+            create_self_config(ca, client)
+        generate_keystone_configmap()
+        set_state('keystone.credentials.configured')
