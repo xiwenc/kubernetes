@@ -1157,6 +1157,7 @@ def build_kubeconfig(server):
                         ks.auth_host(),
                         ks.auth_port(),
                         ks.api_version()),
+                    '#export OS_PROJECT_NAME=k8s'
                     '#export OS_DOMAIN_NAME=k8s',
                     '#export OS_USERNAME=myuser',
                     '#export OS_PASSWORD=secure_pw'
