@@ -767,16 +767,16 @@ def kick_api_server(tls):
     tls_client.reset_certificate_write_flag('server')
 
 
-@when('config.changed.keystone-policy',
-      'keystone-credentials.available.auth')
+@when_any('config.changed.keystone-policy',
+          'config.changed.keystone-ssl-ca')
+@when('keystone-credentials.available.auth')
 def regenerate_cdk_addons():
     configure_cdk_addons()
 
 
 @when_any('kubernetes-master.components.started',
           'ceph-storage.configured',
-          'keystone-credentials.available.auth',
-          'config.changed.keystone-ssl-ca')
+          'keystone-credentials.available.auth')
 @when('leadership.is_leader')
 def configure_cdk_addons():
     ''' Configure CDK addons '''
