@@ -1151,13 +1151,13 @@ def build_kubeconfig(server):
                                          'kube-keystone.sh')
             with open(keystone_path, "w") as f:
                 lines = [
-                    '# Replace with your public address and port for keystone'
+                    '# Replace with your public address and port for keystone',
                     'export OS_AUTH_URL="{}://{}:{}/v{}"'.format(
                         ks.auth_protocol(),
                         ks.auth_host(),
                         ks.auth_port(),
                         ks.api_version()),
-                    '#export OS_PROJECT_NAME=k8s'
+                    '#export OS_PROJECT_NAME=k8s',
                     '#export OS_DOMAIN_NAME=k8s',
                     '#export OS_USERNAME=myuser',
                     '#export OS_PASSWORD=secure_pw'
