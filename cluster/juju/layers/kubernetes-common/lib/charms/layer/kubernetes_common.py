@@ -315,11 +315,12 @@ def create_kubeconfig(kubeconfig, server, ca, key=None, certificate=None,
         # manually add exec command until kubectl can do it for us
         with open(kubeconfig, "r") as f:
             content = f.read()
-            content = content.replace("- name: keystone-user", """- name: keystone-user
+            content = content.replace("""- name: keystone-user
+  user: {}""", """- name: keystone-user
   user:
     exec:
       command: "/snap/bin/client-keystone-auth"
-      apiVersion: "client.authentication.k8s.io/v1alpha1"
+      apiVersion: "client.authentication.k8s.io/v1beta1"
 """)
         with open(kubeconfig, "w") as f:
             f.write(content)
