@@ -1150,19 +1150,42 @@ def build_kubeconfig(server):
             keystone_path = os.path.join(os.sep, 'home', 'ubuntu',
                                          'kube-keystone.sh')
             with open(keystone_path, "w") as f:
-                lines = [
-                    '# Replace with your public address and port for keystone',
-                    'export OS_AUTH_URL="{}://{}:{}/v{}"'.format(
-                        ks.auth_protocol(),
-                        ks.auth_host(),
-                        ks.auth_port(),
-                        ks.api_version()),
-                    '#export OS_PROJECT_NAME=k8s',
-                    '#export OS_DOMAIN_NAME=k8s',
-                    '#export OS_USERNAME=myuser',
-                    '#export OS_PASSWORD=secure_pw'
-                ]
-                f.write(''.join('{}\n'.format(l) for l in lines))
+                lines = """# Replace with your public address and port for keystone
+export OS_AUTH_URL="{}://{}:{}/v{}"
+#export OS_PROJECT_NAME=k8s
+#export OS_DOMAIN_NAME=k8s
+#export OS_USERNAME=myuser
+#export OS_PASSWORD=secure_pw
+"""
+                f.write(lines.format(ks.auth_protocol(),
+                                     ks.auth_host(),
+                                     ks.auth_port(),
+                                     ks.api_version()))
+                lines = """echo "Function get_keystone_token created. type get_keystone_token()"
+echo "in order to generate a login token for the Kubernetes dashboard."
+get_keystone_token() {
+  data='{ "auth": {
+    "identity": {
+      "methods": ["password"],
+      "password": {
+        "user": {
+          "name": "'"${OS_USERNAME}"'",
+          "domain": { "name": "'"${OS_DOMAIN_NAME}"'" },
+          "password": "'"${OS_PASSWORD}"'"
+        }
+      }
+    }
+  }
+}'
+  token=$(curl -s -i -H "Content-Type: application/json" -d "${data}" "${OS_AUTH_URL}/auth/tokens" |grep 'X-Subject-Token')
+  if [ -z "$token" ]; then
+    echo "Invalid authentication information"
+  else
+    echo $(echo ${token} | awk -F ': ' '{print $2}')
+  fi
+}
+"""
+                f.write(lines)
         else:
             hookenv.log('Keystone endpoint not found, will retry.')
 
@@ -1821,23 +1844,6 @@ def _write_vsphere_snap_config(component):
         '[Disk]',
         'scsicontrollertype = "pvscsi"',
     ]))
-
-
-def _write_azure_snap_config(component):
-    azure = endpoint_from_flag('endpoint.azure.ready')
-    _cloud_config_path = cloud_config_path(component)
-    _cloud_config_path.write_text(json.dumps({
-        'useInstanceMetadata': True,
-        'useManagedIdentityExtension': True,
-        'subscriptionId': azure.subscription_id,
-        'resourceGroup': azure.resource_group,
-        'location': azure.resource_group_location,
-        'vnetName': azure.vnet_name,
-        'vnetResourceGroup': azure.vnet_resource_group,
-        'subnetName': azure.subnet_name,
-        'securityGroupName': azure.security_group_name,
-    }))
-
 
 @when('config.changed.keystone-policy', 'keystone-credentials.available.auth')
 def generate_keystone_configmap():
