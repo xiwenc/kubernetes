@@ -1845,6 +1845,7 @@ def _write_vsphere_snap_config(component):
         'scsicontrollertype = "pvscsi"',
     ]))
 
+
 @when('config.changed.keystone-policy', 'keystone-credentials.available.auth')
 def generate_keystone_configmap():
     os.makedirs(keystone_root, exist_ok=True)
