@@ -25,7 +25,8 @@ import random
 from pathlib import Path
 from subprocess import check_output, check_call
 from socket import gethostname, getfqdn
-from shlex import splitfrom subprocess import CalledProcessError
+from shlex import split
+from subprocess import CalledProcessError
 from charmhelpers.core import hookenv, unitdata
 from charmhelpers.core import host
 from charms.reactive import is_state, endpoint_from_flag
