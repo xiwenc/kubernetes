@@ -1147,45 +1147,14 @@ def build_kubeconfig(server):
         # drop keystone helper script?
         ks = endpoint_from_flag('keystone-credentials.available.auth')
         if ks:
+            script_filename = 'kube-keystone.sh'
             keystone_path = os.path.join(os.sep, 'home', 'ubuntu',
-                                         'kube-keystone.sh')
-            with open(keystone_path, "w") as f:
-                lines = """# Replace with your public address and port for keystone
-export OS_AUTH_URL="{}://{}:{}/v{}"
-#export OS_PROJECT_NAME=k8s
-#export OS_DOMAIN_NAME=k8s
-#export OS_USERNAME=myuser
-#export OS_PASSWORD=secure_pw
-"""
-                f.write(lines.format(ks.auth_protocol(),
-                                     ks.auth_host(),
-                                     ks.auth_port(),
-                                     ks.api_version()))
-                lines = """echo "Function get_keystone_token created. type get_keystone_token()"
-echo "in order to generate a login token for the Kubernetes dashboard."
-get_keystone_token() {
-  data='{ "auth": {
-    "identity": {
-      "methods": ["password"],
-      "password": {
-        "user": {
-          "name": "'"${OS_USERNAME}"'",
-          "domain": { "name": "'"${OS_DOMAIN_NAME}"'" },
-          "password": "'"${OS_PASSWORD}"'"
-        }
-      }
-    }
-  }
-}'
-  token=$(curl -s -i -H "Content-Type: application/json" -d "${data}" "${OS_AUTH_URL}/auth/tokens" |grep 'X-Subject-Token')
-  if [ -z "$token" ]; then
-    echo "Invalid authentication information"
-  else
-    echo $(echo ${token} | awk -F ': ' '{print $2}')
-  fi
-}
-"""
-                f.write(lines)
+                                         script_filename)
+            context = {'protocol': ks.credentials_protocol(),
+                       'address': ks.credentials_host(),
+                       'port': ks.credentials_port(),
+                       'version': ks.api_version()}
+            render(script_filename, keystone_path, context)
         else:
             hookenv.log('Keystone endpoint not found, will retry.')
 
