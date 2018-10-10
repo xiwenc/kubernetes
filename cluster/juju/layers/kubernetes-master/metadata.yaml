@@ -36,6 +36,8 @@ provides:
     interface: kubernetes-cni
     scope: container
 requires:
+  tls:
+    interface: tls-certificates
   etcd:
     interface: etcd
   loadbalancer:

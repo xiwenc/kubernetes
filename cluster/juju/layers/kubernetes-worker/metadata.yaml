@@ -30,6 +30,8 @@ requires:
     interface: kube-dns
   kube-control:
     interface: kube-control
+  tls:
+    interface: tls-certificates
   aws:
     interface: aws-integration
   gcp:

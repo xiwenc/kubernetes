@@ -7,9 +7,9 @@ includes:
   - 'layer:docker'
   - 'layer:metrics'
   - 'layer:nagios'
-  - 'layer:tls-client'
   - 'layer:cdk-service-kicker'
   - 'layer:kubernetes-common'
+  - 'interface:tls-certificates'
   - 'interface:http'
   - 'interface:kubernetes-cni'
   - 'interface:kube-dns'
@@ -30,12 +30,6 @@ options:
       - 'ceph-common'
       - 'nfs-common'
       - 'socat'
-  tls-client:
-    ca_certificate_path: '/root/cdk/ca.crt'
-    server_certificate_path: '/root/cdk/server.crt'
-    server_key_path: '/root/cdk/server.key'
-    client_certificate_path: '/root/cdk/client.crt'
-    client_key_path: '/root/cdk/client.key'
   cdk-service-kicker:
     services:
       - 'snap.kubelet.daemon'

@@ -36,16 +36,14 @@ from urllib.request import Request, urlopen
 from charms import layer
 from charms.layer import snap
 from charms.reactive import hook
-from charms.reactive import remove_state
-from charms.reactive import set_state
+from charms.reactive import remove_state, clear_flag
+from charms.reactive import set_state, set_flag
 from charms.reactive import is_state
 from charms.reactive import endpoint_from_flag
 from charms.reactive import when, when_any, when_not, when_none
 from charms.reactive.helpers import data_changed, any_file_changed
 from charms.kubernetes.common import get_version
 from charms.kubernetes.common import retry
-
-from charms.layer import tls_client
 
 from charmhelpers.core import hookenv
 from charmhelpers.core import host
@@ -55,6 +53,11 @@ from charmhelpers.core.templating import render
 from charmhelpers.fetch import apt_install
 from charmhelpers.contrib.charmsupport import nrpe
 
+from charms.layer.kubernetes_common import ca_cert_path
+from charms.layer.kubernetes_common import client_cert_path
+from charms.layer.kubernetes_common import client_key_path
+from charms.layer.kubernetes_common import server_cert_path
+from charms.layer.kubernetes_common import server_key_path
 from charms.layer.kubernetes_common import kubeclientconfig_path
 from charms.layer.kubernetes_common import migrate_resource_checksums
 from charms.layer.kubernetes_common import check_resources_for_upgrade_needed
@@ -542,7 +545,8 @@ def master_services_down():
     return failing_services
 
 
-@when('etcd.available', 'tls_client.server.certificate.saved',
+@when('etcd.available',
+      'kubernetes-master.certs.written',
       'authentication.setup',
       'leadership.set.auto_storage_backend',
       'cni.available')
@@ -671,10 +675,44 @@ def push_service_data(kube_api):
     kube_api.configure(port=6443)
 
 
-@when('certificates.available', 'kube-api-endpoint.available')
-def send_data(tls, kube_api_endpoint):
-    '''Send the data that is required to create a server certificate for
-    this server.'''
+@when('tls.ca.changed')
+def install_ca_cert():
+    """
+    Install or update the root CA cert.
+    """
+    tls = endpoint_from_flag('tls.ca.changed')
+    # install at system level
+    host.install_ca_cert(tls.root_ca_cert)
+    # also save in easy-to-read location
+    host.write_file(ca_cert_path, tls.root_ca_cert)
+    clear_flag('tls.ca.changed')
+
+
+@when('tls.certs.changed')
+def update_certs():
+    """
+    Write new cert data.
+    """
+    tls = endpoint_from_flag('tls.certs.changed')
+    common_name = hookenv.unit_public_ip()
+    server_cert = tls.server_certs_map[common_name]
+    host.write_file(server_cert_path, server_cert.cert)
+    host.write_file(server_key_path, server_cert.key)
+
+    client_cert = tls.client_certs_map[common_name]
+    host.write_file(client_cert_path, client_cert.cert)
+    host.write_file(client_key_path, client_cert.key)
+    clear_flag('tls.certs.changed')
+    set_flag('kubernetes-master.certs.written')
+    set_flag('kubernetes-master.certs.changed')
+
+
+@when('tls.available', 'kube-api-endpoint.available')
+def request_certs():
+    '''Send the data that is required to create a server and client certificate
+    for this server.'''
+    tls = endpoint_from_flag('tls.available')
+    kube_api_endpoint = endpoint_from_flag('kube-api-endpoint.available')
     # Use the public ip of this unit as the Common Name for the certificate.
     common_name = hookenv.unit_public_ip()
 
@@ -703,32 +741,9 @@ def send_data(tls, kube_api_endpoint):
     if extra_sans and not extra_sans == "":
         sans.extend(extra_sans.split())
 
-    # Create a path safe name by removing path characters from the unit name.
-    certificate_name = hookenv.local_unit().replace('/', '_')
-    # Request a server cert with this information.
-    tls.request_server_cert(common_name, sans, certificate_name)
-
-
-@when('config.changed.extra_sans', 'certificates.available',
-      'kube-api-endpoint.available')
-def update_certificate(tls, kube_api_endpoint):
-    # Using the config.changed.extra_sans flag to catch changes.
-    # IP changes will take ~5 minutes or so to propagate, but
-    # it will update.
-    send_data(tls, kube_api_endpoint)
-
-
-@when('certificates.server.cert.available',
-      'kubernetes-master.components.started',
-      'tls_client.server.certificate.written')
-def kick_api_server(tls):
-    # need to be idempotent and don't want to kick the api server
-    # without need
-    if data_changed('cert', tls.get_server_cert()):
-        # certificate changed, so restart the api server
-        hookenv.log("Certificate information changed, restarting api server")
-        service_restart('snap.kube-apiserver.daemon')
-    tls_client.reset_certificate_write_flag('server')
+    # Request certs with this information.
+    tls.request_server_cert(common_name, sans)
+    tls.request_client_cert(common_name, sans)
 
 
 @when_any('kubernetes-master.components.started', 'ceph-storage.configured')
@@ -992,7 +1007,8 @@ def on_config_allow_privileged_change():
 
 @when_any('config.changed.api-extra-args',
           'config.changed.audit-policy',
-          'config.changed.audit-webhook-config')
+          'config.changed.audit-webhook-config',
+          'kubernetes-master.certs.changed')
 @when('kubernetes-master.components.started')
 @when('leadership.set.auto_storage_backend')
 @when('etcd.available')
@@ -1148,14 +1164,6 @@ def write_file_with_autogenerated_header(path, contents):
 
 def configure_apiserver(etcd_connection_string):
     api_opts = {}
-
-    # Get the tls paths from the layer data.
-    layer_options = layer.options('tls-client')
-    ca_cert_path = layer_options.get('ca_certificate_path')
-    client_cert_path = layer_options.get('client_certificate_path')
-    client_key_path = layer_options.get('client_key_path')
-    server_cert_path = layer_options.get('server_certificate_path')
-    server_key_path = layer_options.get('server_key_path')
 
     # at one point in time, this code would set ca-client-cert,
     # but this was removed. This was before configure_kubernetes_service

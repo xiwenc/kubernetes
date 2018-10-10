@@ -36,6 +36,11 @@ db = unitdata.kv()
 kubeclientconfig_path = '/root/.kube/config'
 gcp_creds_env_key = 'GOOGLE_APPLICATION_CREDENTIALS'
 kubeproxyconfig_path = '/root/cdk/kubeproxyconfig'
+ca_cert_path = '/root/cdk/ca.crt'
+client_cert_path = '/root/cdk/client.crt'
+client_key_path = '/root/cdk/client.key'
+server_cert_path = '/root/cdk/server.crt'
+server_key_path = '/root/cdk/server.key'
 
 
 def get_version(bin_name):
@@ -476,4 +481,3 @@ def configure_kube_proxy(configure_prefix, api_servers, cluster_cidr):
 
     configure_kubernetes_service(configure_prefix, 'kube-proxy',
                                  kube_proxy_opts, 'proxy-extra-args')
-
