@@ -512,15 +512,16 @@ def set_final_status():
                                'Waiting for CNI plugins to become available')
         return
 
+    # Note that after this point, kubernetes-master.components.started is always
+    # True.
     is_leader = is_state('leadership.is_leader')
     authentication_setup = is_state('authentication.setup')
     if not is_leader and not authentication_setup:
         hookenv.status_set('waiting', 'Waiting on leaders crypto keys.')
         return
 
-    components_started = is_state('kubernetes-master.components.started')
     addons_configured = is_state('cdk-addons.configured')
-    if is_leader and components_started and not addons_configured:
+    if is_leader and not addons_configured:
         hookenv.status_set('waiting', 'Waiting to retry addon deployment')
         return
 
