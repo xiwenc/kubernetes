@@ -501,6 +501,16 @@ def set_final_status():
             msg = 'Stopped services: {}'.format(','.join(failing_services))
             hookenv.status_set('blocked', msg)
             return
+    else:
+        # if we don't have components starting, we're waiting for that and
+        # shouldn't fall through to Kubernetes master running.
+        if (is_state('cni.available')):
+            hookenv.status_set('blocked',
+                               'Waiting for master components to start')
+        else:
+            hookenv.status_set('blocked',
+                               'Waiting for CNI plugins to become available')
+        return
 
     is_leader = is_state('leadership.is_leader')
     authentication_setup = is_state('authentication.setup')
