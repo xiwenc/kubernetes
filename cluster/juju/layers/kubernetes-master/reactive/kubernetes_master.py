@@ -505,7 +505,7 @@ def set_final_status():
         # if we don't have components starting, we're waiting for that and
         # shouldn't fall through to Kubernetes master running.
         if (is_state('cni.available')):
-            hookenv.status_set('waiting',
+            hookenv.status_set('maintenance',
                                'Waiting for master components to start')
         else:
             hookenv.status_set('waiting',
