@@ -306,7 +306,11 @@ def storage_backend_changed():
 def configure_cni(cni):
     ''' Set master configuration on the CNI relation. This lets the CNI
     subordinate know that we're the master so it can respond accordingly. '''
-    cni.set_config(is_master=True, kubeconfig_path='')
+    # not sure how I feel about using kubeclientconfig here. Should we
+    # generate a new config just for master cni? We use the kubelet config
+    # on the worker, which may become available here if we ever support
+    # workloads on the master units.
+    cni.set_config(is_master=True, kubeconfig_path=kubeclientconfig_path)
 
 
 @when('leadership.is_leader')
@@ -1109,7 +1113,7 @@ def build_kubeconfig(server):
     client_pass = get_password('basic_auth.csv', 'admin')
     # Do we have everything we need?
     if ca_exists and client_pass:
-        # Create an absolute path for the kubeconfig file.
+        # Create an absolute path for the client kubeconfig file.
         kubeconfig_path = os.path.join(os.sep, 'home', 'ubuntu', 'config')
         # Create the kubeconfig on this system so users can access the cluster.
 
