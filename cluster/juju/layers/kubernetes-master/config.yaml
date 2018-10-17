@@ -239,7 +239,7 @@ options:
     default: false
     description: |
       If true and the Keystone charm is related, users will authorize against
-      the Keystone server. Note that if related, users will always authorize
+      the Keystone server. Note that if related, users will always authenticate
       against Keystone.
   keystone-ssl-ca:
     type: string
