@@ -3,11 +3,11 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library")
 go_library(
     name = "go_default_library",
     srcs = [
-        "csi_objects.go",
         "csi_volumes.go",
         "empty_dir_wrapper.go",
         "ephemeral_volume.go",
         "flexvolume.go",
+        "flexvolume_mounted_volume_resize.go",
         "flexvolume_online_resize.go",
         "generic_persistent_volume-disruptive.go",
         "in_tree_volumes.go",
@@ -72,6 +72,7 @@ go_library(
         "//test/e2e/framework/providers/gce:go_default_library",
         "//test/e2e/framework/testfiles:go_default_library",
         "//test/e2e/storage/drivers:go_default_library",
+        "//test/e2e/storage/testpatterns:go_default_library",
         "//test/e2e/storage/testsuites:go_default_library",
         "//test/e2e/storage/utils:go_default_library",
         "//test/utils/image:go_default_library",
