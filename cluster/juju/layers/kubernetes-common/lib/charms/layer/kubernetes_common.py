@@ -142,9 +142,9 @@ def calculate_and_store_resource_checksums(checksum_prefix, snap_resources):
         db.set(key, checksum)
 
 
-def get_ingress_address(relation_name):
+def get_ingress_address(endpoint_name):
     try:
-        network_info = hookenv.network_get(relation_name)
+        network_info = hookenv.network_get(endpoint_name)
     except NotImplementedError:
         network_info = []
 
