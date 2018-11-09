@@ -383,6 +383,12 @@ def _cloud_endpoint_ca_path(component):
     return _snap_common_path(component) / 'cloud-endpoint-ca.crt'
 
 
+def encryption_config_path():
+    apiserver_snap_common_path = _snap_common_path('kube-apiserver')
+    encryption_conf_dir = apiserver_snap_common_path / 'encryption'
+    return encryption_conf_dir / 'encryption_config.yaml'
+
+
 def write_gcp_snap_config(component):
     # gcp requires additional credentials setup
     gcp = endpoint_from_flag('endpoint.gcp.ready')
