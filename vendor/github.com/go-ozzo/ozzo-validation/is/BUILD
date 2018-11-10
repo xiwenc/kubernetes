@@ -2,10 +2,14 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library")
 
 go_library(
     name = "go_default_library",
-    srcs = ["godbc.go"],
-    importmap = "k8s.io/kubernetes/vendor/github.com/lpabon/godbc",
-    importpath = "github.com/lpabon/godbc",
+    srcs = ["rules.go"],
+    importmap = "k8s.io/kubernetes/vendor/github.com/go-ozzo/ozzo-validation/is",
+    importpath = "github.com/go-ozzo/ozzo-validation/is",
     visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/asaskevich/govalidator:go_default_library",
+        "//vendor/github.com/go-ozzo/ozzo-validation:go_default_library",
+    ],
 )
 
 filegroup(
