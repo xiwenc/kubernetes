@@ -18,7 +18,8 @@ from subprocess import check_output
 import yaml
 
 
-cmd = ['juju', 'run', '--application', 'kubernetes', '--format=yaml', 'is-leader']
+cmd = ['juju', 'run', '--application', 'kubernetes', '--format=yaml',
+       'is-leader']
 out = check_output(cmd)
 try:
     parsed_output = yaml.safe_load(out)
@@ -27,5 +28,5 @@ try:
         unit_id = unit['UnitId']
         if 'True' in standard_out:
             print(unit_id)
-except:
+except Exception:
     pass
