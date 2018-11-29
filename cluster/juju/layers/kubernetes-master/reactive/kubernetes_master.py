@@ -24,6 +24,7 @@ import string
 import json
 import ipaddress
 import traceback
+import yaml
 
 from charms.leadership import leader_get, leader_set
 
@@ -37,14 +38,16 @@ from urllib.request import Request, urlopen
 from charms import layer
 from charms.layer import snap
 from charms.reactive import hook
-from charms.reactive import remove_state
-from charms.reactive import set_state
-from charms.reactive import is_state
+from charms.reactive import remove_state, clear_flag
+from charms.reactive import set_state, set_flag
+from charms.reactive import is_state, is_flag_set
 from charms.reactive import endpoint_from_flag
 from charms.reactive import when, when_any, when_not, when_none
 from charms.reactive.helpers import data_changed, any_file_changed
 
 from charms.layer import tls_client
+from charms.layer import vaultlocker
+from charms.layer import vault_kv
 
 from charmhelpers.core import hookenv
 from charmhelpers.core import host
@@ -65,6 +68,7 @@ from charms.layer.kubernetes_common import create_kubeconfig
 from charms.layer.kubernetes_common import get_service_ip
 from charms.layer.kubernetes_common import configure_kubernetes_service
 from charms.layer.kubernetes_common import cloud_config_path
+from charms.layer.kubernetes_common import encryption_config_path
 from charms.layer.kubernetes_common import write_gcp_snap_config
 from charms.layer.kubernetes_common import write_openstack_snap_config
 from charms.layer.kubernetes_common import write_azure_snap_config
@@ -463,6 +467,18 @@ def set_final_status():
         goal_state = hookenv.goal_state()
     except NotImplementedError:
         goal_state = {}
+
+    if is_flag_set('kubernetes-master.secure-storage.failed'):
+        hookenv.status_set('blocked',
+                           'Failed to configure encryption; '
+                           'secrets are unencrypted or inaccessible')
+        return
+    elif is_flag_set('kubernetes-master.secure-storage.created'):
+        if not encryption_config_path().exists():
+            hookenv.status_set('blocked',
+                               'VaultLocker containing encryption config '
+                               'unavailable')
+            return
 
     vsphere_joined = is_state('endpoint.vsphere.joined')
     azure_joined = is_state('endpoint.azure.joined')
@@ -1495,6 +1511,10 @@ def configure_apiserver(etcd_connection_string):
     else:
         remove_if_exists(audit_webhook_config_path)
 
+    if is_flag_set('kubernetes-master.secure-storage.created'):
+        api_opts['experimental-encryption-provider-config'] = \
+            str(encryption_config_path())
+
     configure_kubernetes_service(configure_prefix, 'kube-apiserver',
                                  api_opts, 'api-extra-args')
     service_restart('snap.kube-apiserver.daemon')
@@ -1951,14 +1971,19 @@ def setup_keystone_user():
     ks.request_credentials('k8s')
 
 
+def _kick_apiserver():
+    if is_flag_set('kubernetes-master.components.started'):
+        etcd = endpoint_from_flag('etcd.available')
+        configure_apiserver(etcd.get_connection_string())
+
+
 @when('keystone.credentials.configured',
       'leadership.set.keystone-cdk-addons-configured')
 @when_not('keystone.apiserver.configured')
 def keystone_kick_apiserver():
     # if we have run configure, but we haven't configured the api server
     # because the service wasn't up yet, we need to keep trying
-    etcd = endpoint_from_flag('etcd.available')
-    configure_apiserver(etcd.get_connection_string())
+    _kick_apiserver()
 
 
 @when('keystone-credentials.available.auth', 'certificates.ca.available',
@@ -1989,3 +2014,84 @@ def keystone_config():
             create_self_config(ca, client)
         generate_keystone_configmap()
         set_state('keystone.credentials.configured')
+
+
+@when('layer.vault-kv.app-kv.set.encryption_key',
+      'layer.vaultlocker.ready')
+@when_not('kubernetes-master.secure-storage.created')
+def create_secure_storage():
+    encryption_conf_dir = encryption_config_path().parent
+    encryption_conf_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    try:
+        vaultlocker.create_encrypted_loop_mount(encryption_conf_dir)
+    except vaultlocker.VaultLockerError:
+        # One common cause of this would be deploying on lxd.
+        # Should this be more fatal?
+        hookenv.log(
+            'Unable to create encrypted mount for storing encryption config.\n'
+            '{}'.format(traceback.format_exc()), level=hookenv.ERROR)
+        set_flag('kubernetes-master.secure-storage.failed')
+        clear_flag('kubernetes-master.secure-storage.created')
+    else:
+        # TODO: If Vault isn't available, it's probably still better to encrypt
+        # anyway and store the key in plaintext and leadership than to just
+        # give up on encryption entirely.
+        _write_encryption_config()
+        # prevent an unnecessary service restart on this
+        # unit since we've already handled the change
+        clear_flag('layer.vault-kv.app-kv.changed.encryption_key')
+        # mark secure storage as ready
+        set_flag('kubernetes-master.secure-storage.created')
+        clear_flag('kubernetes-master.secure-storage.failed')
+        # restart to regen config
+        _kick_apiserver()
+
+
+@when_not('layer.vaultlocker.ready')
+@when('kubernetes-master.secure-storage.created')
+def revert_secure_storage():
+    clear_flag('kubernetes-master.secure-storage.created')
+    clear_flag('kubernetes-master.secure-storage.failed')
+    _kick_apiserver()  # need to regen config
+
+
+@when('leadership.is_leader',
+      'layer.vault-kv.ready')
+@when_not('layer.vault-kv.app-kv.set.encryption_key')
+def generate_encryption_key():
+    app_kv = vault_kv.VaultAppKV()
+    app_kv['encryption_key'] = token_generator(32)
+
+
+@when('layer.vault-kv.app-kv.changed.encryption_key',
+      'kubernetes-master.secure-storage.created')
+def restart_apiserver_for_encryption_key():
+    _kick_apiserver()
+    clear_flag('layer.vault-kv.app-kv.changed.encryption_key')
+
+
+def _write_encryption_config():
+    app_kv = vault_kv.VaultAppKV()
+    encryption_config_path().parent.mkdir(parents=True, exist_ok=True)
+    secret = app_kv['encryption_key']
+    secret = base64.b64encode(secret.encode('utf8')).decode('utf8')
+    host.write_file(
+        path=str(encryption_config_path()),
+        perms=0o600,
+        content=yaml.safe_dump({
+            'kind': 'EncryptionConfig',
+            'apiVersion': 'v1',
+            'resources': [{
+                'resources': ['secrets'],
+                'providers': [
+                    {'aescbc': {
+                        'keys': [{
+                            'name': 'key1',
+                            'secret': secret,
+                        }],
+                    }},
+                    {'identity': {}},
+                ]
+            }],
+        })
+    )
