@@ -20,14 +20,10 @@ package factory
 
 import (
 	"fmt"
-	"os"
-	"os/signal"
 	"reflect"
 	"time"
 
-	"k8s.io/klog"
-
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -38,7 +34,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
-	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	appsinformers "k8s.io/client-go/informers/apps/v1"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	policyinformers "k8s.io/client-go/informers/policy/v1beta1"
@@ -50,11 +45,12 @@ import (
 	storagelisters "k8s.io/client-go/listers/storage/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/klog"
 	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
-	"k8s.io/kubernetes/pkg/features"
 	kubeletapis "k8s.io/kubernetes/pkg/kubelet/apis"
 	"k8s.io/kubernetes/pkg/scheduler/algorithm"
 	"k8s.io/kubernetes/pkg/scheduler/algorithm/predicates"
+	"k8s.io/kubernetes/pkg/scheduler/algorithm/priorities"
 	schedulerapi "k8s.io/kubernetes/pkg/scheduler/api"
 	"k8s.io/kubernetes/pkg/scheduler/api/validation"
 	"k8s.io/kubernetes/pkg/scheduler/core"
@@ -302,10 +298,10 @@ func NewConfigFactory(args *ConfigFactoryArgs) Configurator {
 					if pod, ok := t.Obj.(*v1.Pod); ok {
 						return assignedPod(pod)
 					}
-					runtime.HandleError(fmt.Errorf("unable to convert object %T to *v1.Pod in %T", obj, c))
+					runtime.HandleError(fmt.Errorf("unable to convert object %T to *v1.Pod for filtering scheduledPod in %T", obj, c))
 					return false
 				default:
-					runtime.HandleError(fmt.Errorf("unable to handle object in %T: %T", c, obj))
+					runtime.HandleError(fmt.Errorf("unable to handle object for filtering scheduledPod in %T: %T", c, obj))
 					return false
 				}
 			},
@@ -327,10 +323,10 @@ func NewConfigFactory(args *ConfigFactoryArgs) Configurator {
 					if pod, ok := t.Obj.(*v1.Pod); ok {
 						return !assignedPod(pod) && responsibleForPod(pod, args.SchedulerName)
 					}
-					runtime.HandleError(fmt.Errorf("unable to convert object %T to *v1.Pod in %T", obj, c))
+					runtime.HandleError(fmt.Errorf("unable to convert object %T to *v1.Pod for filtering unscheduledPod in %T", obj, c))
 					return false
 				default:
-					runtime.HandleError(fmt.Errorf("unable to handle object in %T: %T", c, obj))
+					runtime.HandleError(fmt.Errorf("unable to handle object for filtering unscheduledPod in %T: %T", c, obj))
 					return false
 				}
 			},
@@ -378,39 +374,27 @@ func NewConfigFactory(args *ConfigFactoryArgs) Configurator {
 		},
 	)
 
-	if utilfeature.DefaultFeatureGate.Enabled(features.VolumeScheduling) {
-		// Setup volume binder
-		c.volumeBinder = volumebinder.NewVolumeBinder(args.Client, args.PvcInformer, args.PvInformer, args.StorageClassInformer, time.Duration(args.BindTimeoutSeconds)*time.Second)
+	// Setup volume binder
+	c.volumeBinder = volumebinder.NewVolumeBinder(args.Client, args.NodeInformer, args.PvcInformer, args.PvInformer, args.StorageClassInformer, time.Duration(args.BindTimeoutSeconds)*time.Second)
 
-		args.StorageClassInformer.Informer().AddEventHandler(
-			cache.ResourceEventHandlerFuncs{
-				AddFunc: c.onStorageClassAdd,
-			},
-		)
-	}
+	args.StorageClassInformer.Informer().AddEventHandler(
+		cache.ResourceEventHandlerFuncs{
+			AddFunc: c.onStorageClassAdd,
+		},
+	)
 
-	// Setup cache comparer
+	// Setup cache debugger
 	debugger := cachedebugger.New(
 		args.NodeInformer.Lister(),
 		args.PodInformer.Lister(),
 		c.schedulerCache,
 		c.podQueue,
 	)
-
-	ch := make(chan os.Signal, 1)
-	signal.Notify(ch, compareSignal)
+	debugger.ListenForSignal(c.StopEverything)
 
 	go func() {
-		for {
-			select {
-			case <-c.StopEverything:
-				c.podQueue.Close()
-				return
-			case <-ch:
-				debugger.Comparer.Compare()
-				debugger.Dumper.DumpAll()
-			}
-		}
+		<-c.StopEverything
+		c.podQueue.Close()
 	}()
 
 	return c
@@ -467,7 +451,7 @@ func (c *configFactory) onPvAdd(obj interface{}) {
 	// Pods created when there are no PVs available will be stuck in
 	// unschedulable queue. But unbound PVs created for static provisioning and
 	// delay binding storage class are skipped in PV controller dynamic
-	// provisiong and binding process, will not trigger events to schedule pod
+	// provisioning and binding process, will not trigger events to schedule pod
 	// again. So we need to move pods to active queue on PV add for this
 	// scenario.
 	c.podQueue.MoveAllToActiveQueue()
@@ -491,16 +475,13 @@ func (c *configFactory) onPvcAdd(obj interface{}) {
 }
 
 func (c *configFactory) onPvcUpdate(old, new interface{}) {
-	if !utilfeature.DefaultFeatureGate.Enabled(features.VolumeScheduling) {
-		return
-	}
 	c.podQueue.MoveAllToActiveQueue()
 }
 
 func (c *configFactory) onStorageClassAdd(obj interface{}) {
 	sc, ok := obj.(*storagev1.StorageClass)
 	if !ok {
-		klog.Errorf("cannot convert to *storagev1.StorageClass: %v", obj)
+		klog.Errorf("cannot convert to *storagev1.StorageClass for storageClassAdd: %v", obj)
 		return
 	}
 
@@ -543,7 +524,7 @@ func (c *configFactory) GetClient() clientset.Interface {
 	return c.client
 }
 
-// GetScheduledPodListerIndexer provides a pod lister, mostly internal use, but may also be called by mock-tests.
+// GetScheduledPodLister provides a pod lister, mostly internal use, but may also be called by mock-tests.
 func (c *configFactory) GetScheduledPodLister() corelisters.PodLister {
 	return c.scheduledPodLister
 }
@@ -631,7 +612,7 @@ func (c *configFactory) deletePodFromCache(obj interface{}) {
 		var ok bool
 		pod, ok = t.Obj.(*v1.Pod)
 		if !ok {
-			klog.Errorf("cannot convert to *v1.Pod: %v", t.Obj)
+			klog.Errorf("cannot convert DeletedFinalStateUnknown obj to *v1.Pod: %v", t.Obj)
 			return
 		}
 	default:
@@ -742,7 +723,7 @@ func (c *configFactory) deleteNodeFromCache(obj interface{}) {
 		var ok bool
 		node, ok = t.Obj.(*v1.Node)
 		if !ok {
-			klog.Errorf("cannot convert to *v1.Node: %v", t.Obj)
+			klog.Errorf("cannot convert DeletedFinalStateUnknown obj to *v1.Node: %v", t.Obj)
 			return
 		}
 	default:
@@ -841,24 +822,6 @@ func (c *configFactory) CreateFromConfig(policy schedulerapi.Policy) (*Config, e
 	return c.CreateFromKeys(predicateKeys, priorityKeys, extenders)
 }
 
-// getBinderFunc returns an func which returns an extender that supports bind or a default binder based on the given pod.
-func (c *configFactory) getBinderFunc(extenders []algorithm.SchedulerExtender) func(pod *v1.Pod) Binder {
-	var extenderBinder algorithm.SchedulerExtender
-	for i := range extenders {
-		if extenders[i].IsBinder() {
-			extenderBinder = extenders[i]
-			break
-		}
-	}
-	defaultBinder := &binder{c.client}
-	return func(pod *v1.Pod) Binder {
-		if extenderBinder != nil && extenderBinder.IsInterested(pod) {
-			return extenderBinder
-		}
-		return defaultBinder
-	}
-}
-
 // Creates a scheduler from a set of registered fit predicate keys and priority keys.
 func (c *configFactory) CreateFromKeys(predicateKeys, priorityKeys sets.String, extenders []algorithm.SchedulerExtender) (*Config, error) {
 	klog.V(2).Infof("Creating scheduler with fit predicates '%v' and priority functions '%v'", predicateKeys, priorityKeys)
@@ -913,21 +876,37 @@ func (c *configFactory) CreateFromKeys(predicateKeys, priorityKeys sets.String, 
 		// The scheduler only needs to consider schedulable nodes.
 		NodeLister:          &nodeLister{c.nodeLister},
 		Algorithm:           algo,
-		GetBinder:           c.getBinderFunc(extenders),
+		GetBinder:           getBinderFunc(c.client, extenders),
 		PodConditionUpdater: &podConditionUpdater{c.client},
 		PodPreemptor:        &podPreemptor{c.client},
 		PluginSet:           c.pluginSet,
 		WaitForCacheSync: func() bool {
 			return cache.WaitForCacheSync(c.StopEverything, c.scheduledPodsHasSynced)
 		},
-		NextPod: func() *v1.Pod {
-			return c.getNextPod()
-		},
+		NextPod:         internalqueue.MakeNextPodFunc(c.podQueue),
 		Error:           c.MakeDefaultErrorFunc(podBackoff, c.podQueue),
 		StopEverything:  c.StopEverything,
 		VolumeBinder:    c.volumeBinder,
 		SchedulingQueue: c.podQueue,
 	}, nil
+}
+
+// getBinderFunc returns a func which returns an extender that supports bind or a default binder based on the given pod.
+func getBinderFunc(client clientset.Interface, extenders []algorithm.SchedulerExtender) func(pod *v1.Pod) Binder {
+	var extenderBinder algorithm.SchedulerExtender
+	for i := range extenders {
+		if extenders[i].IsBinder() {
+			extenderBinder = extenders[i]
+			break
+		}
+	}
+	defaultBinder := &binder{client}
+	return func(pod *v1.Pod) Binder {
+		if extenderBinder != nil && extenderBinder.IsInterested(pod) {
+			return extenderBinder
+		}
+		return defaultBinder
+	}
 }
 
 type nodeLister struct {
@@ -938,7 +917,7 @@ func (n *nodeLister) List() ([]*v1.Node, error) {
 	return n.NodeLister.List(labels.Everything())
 }
 
-func (c *configFactory) GetPriorityFunctionConfigs(priorityKeys sets.String) ([]algorithm.PriorityConfig, error) {
+func (c *configFactory) GetPriorityFunctionConfigs(priorityKeys sets.String) ([]priorities.PriorityConfig, error) {
 	pluginArgs, err := c.getPluginArgs()
 	if err != nil {
 		return nil, err
@@ -947,7 +926,7 @@ func (c *configFactory) GetPriorityFunctionConfigs(priorityKeys sets.String) ([]
 	return getPriorityFunctionConfigs(priorityKeys, *pluginArgs)
 }
 
-func (c *configFactory) GetPriorityMetadataProducer() (algorithm.PriorityMetadataProducer, error) {
+func (c *configFactory) GetPriorityMetadataProducer() (priorities.PriorityMetadataProducer, error) {
 	pluginArgs, err := c.getPluginArgs()
 	if err != nil {
 		return nil, err
@@ -989,16 +968,6 @@ func (c *configFactory) getPluginArgs() (*PluginFactoryArgs, error) {
 		VolumeBinder:                   c.volumeBinder,
 		HardPodAffinitySymmetricWeight: c.hardPodAffinitySymmetricWeight,
 	}, nil
-}
-
-func (c *configFactory) getNextPod() *v1.Pod {
-	pod, err := c.podQueue.Pop()
-	if err == nil {
-		klog.V(4).Infof("About to try and schedule pod %v/%v", pod.Namespace, pod.Name)
-		return pod
-	}
-	klog.Errorf("Error while retrieving next pod from scheduling queue: %v", err)
-	return nil
 }
 
 // assignedPod selects pods that are assigned (scheduled and running).
@@ -1125,7 +1094,6 @@ func (c *configFactory) MakeDefaultErrorFunc(backoff *util.PodBackoff, podQueue 
 				Namespace: pod.Namespace,
 				Name:      pod.Name,
 			}
-			origPod := pod
 
 			// When pod priority is enabled, we would like to place an unschedulable
 			// pod in the unschedulable queue. This ensures that if the pod is nominated
@@ -1144,21 +1112,11 @@ func (c *configFactory) MakeDefaultErrorFunc(backoff *util.PodBackoff, podQueue 
 				if err == nil {
 					if len(pod.Spec.NodeName) == 0 {
 						podQueue.AddUnschedulableIfNotPresent(pod)
-					} else {
-						if c.volumeBinder != nil {
-							// Volume binder only wants to keep unassigned pods
-							c.volumeBinder.DeletePodBindings(pod)
-						}
 					}
 					break
 				}
 				if errors.IsNotFound(err) {
 					klog.Warningf("A pod %v no longer exists", podID)
-
-					if c.volumeBinder != nil {
-						// Volume binder only wants to keep unassigned pods
-						c.volumeBinder.DeletePodBindings(origPod)
-					}
 					return
 				}
 				klog.Errorf("Error getting pod %v for retry: %v; retrying...", podID, err)
@@ -1204,7 +1162,7 @@ type podConditionUpdater struct {
 }
 
 func (p *podConditionUpdater) Update(pod *v1.Pod, condition *v1.PodCondition) error {
-	klog.V(3).Infof("Updating pod condition for %s/%s to (%s==%s)", pod.Namespace, pod.Name, condition.Type, condition.Status)
+	klog.V(3).Infof("Updating pod condition for %s/%s to (%s==%s, Reason=%s)", pod.Namespace, pod.Name, condition.Type, condition.Status, condition.Reason)
 	if podutil.UpdatePodCondition(&pod.Status, condition) {
 		_, err := p.Client.CoreV1().Pods(pod.Namespace).UpdateStatus(pod)
 		return err

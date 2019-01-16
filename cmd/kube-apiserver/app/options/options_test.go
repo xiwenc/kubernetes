@@ -96,7 +96,6 @@ func TestAddFlags(t *testing.T) {
 		"--contention-profiling=true",
 		"--enable-aggregator-routing=true",
 		"--enable-logs-handler=false",
-		"--enable-swagger-ui=true",
 		"--endpoint-reconciler-type=" + string(reconcilers.LeaseEndpointReconcilerType),
 		"--etcd-keyfile=/var/run/kubernetes/etcd.key",
 		"--etcd-certfile=/var/run/kubernetes/etcdce.crt",
@@ -141,12 +140,14 @@ func TestAddFlags(t *testing.T) {
 		},
 		Etcd: &apiserveroptions.EtcdOptions{
 			StorageConfig: storagebackend.Config{
-				Type:                  "etcd3",
-				ServerList:            nil,
+				Type: "etcd3",
+				Transport: storagebackend.TransportConfig{
+					ServerList: nil,
+					KeyFile:    "/var/run/kubernetes/etcd.key",
+					CAFile:     "/var/run/kubernetes/etcdca.crt",
+					CertFile:   "/var/run/kubernetes/etcdce.crt",
+				},
 				Prefix:                "/registry",
-				KeyFile:               "/var/run/kubernetes/etcd.key",
-				CAFile:                "/var/run/kubernetes/etcdca.crt",
-				CertFile:              "/var/run/kubernetes/etcdce.crt",
 				CompactionInterval:    storagebackend.DefaultCompactInterval,
 				CountMetricPollPeriod: time.Minute,
 			},
@@ -243,7 +244,6 @@ func TestAddFlags(t *testing.T) {
 			PolicyFile: "/policy",
 		},
 		Features: &apiserveroptions.FeatureOptions{
-			EnableSwaggerUI:           true,
 			EnableProfiling:           true,
 			EnableContentionProfiling: true,
 		},
