@@ -495,3 +495,7 @@ def configure_kube_proxy(configure_prefix, api_servers, cluster_cidr):
 
     configure_kubernetes_service(configure_prefix, 'kube-proxy',
                                  kube_proxy_opts, 'proxy-extra-args')
+
+
+def get_unit_number():
+    return int(hookenv.local_unit().split('/')[1])
