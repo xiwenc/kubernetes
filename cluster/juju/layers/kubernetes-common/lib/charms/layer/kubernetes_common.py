@@ -487,7 +487,8 @@ def configure_kube_proxy(configure_prefix, api_servers, cluster_cidr):
     kube_proxy_opts['kubeconfig'] = kubeproxyconfig_path
     kube_proxy_opts['logtostderr'] = 'true'
     kube_proxy_opts['v'] = '0'
-    kube_proxy_opts['master'] = random.choice(api_servers)
+    num_apis = len(api_servers)
+    kube_proxy_opts['master'] = api_servers[get_unit_number() % num_apis]
     kube_proxy_opts['hostname-override'] = get_node_name()
 
     if host.is_container():
