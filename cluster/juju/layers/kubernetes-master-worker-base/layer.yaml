@@ -1,0 +1,5 @@
+repo: https://github.com/kubernetes/kubernetes.git
+includes:
+- 'layer:kubernetes-common'
+- 'layer:docker'
+- 'interface:docker-registry'

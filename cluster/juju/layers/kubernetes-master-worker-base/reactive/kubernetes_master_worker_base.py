@@ -14,7 +14,7 @@ db = unitdata.kv()
 
 
 @when('endpoint.docker-registry.ready')
-@when_not('kubernetes-common.registry.configured')
+@when_not('kubernetes-master-worker-base.registry.configured')
 def configure_registry():
     '''Add docker registry config when present.'''
     registry = endpoint_from_flag('endpoint.docker-registry.ready')
@@ -59,17 +59,17 @@ def configure_registry():
 
     # NB: store our netloc so we can clean up if the registry goes away
     db.set('registry_netloc', netloc)
-    set_state('kubernetes-common.registry.configured')
+    set_state('kubernetes-master-worker-base.registry.configured')
 
 
 @when('endpoint.docker-registry.changed',
-      'kubernetes-common.registry.configured')
+      'kubernetes-master-worker-base.registry.configured')
 def reconfigure_registry():
     '''Signal to update the registry config when something changes.'''
-    remove_state('kubernetes-common.registry.configured')
+    remove_state('kubernetes-master-worker-base.registry.configured')
 
 
-@when('kubernetes-common.registry.configured')
+@when('kubernetes-master-worker-base.registry.configured')
 @when_not('endpoint.docker-registry.joined')
 def remove_registry():
     '''Remove registry config when the registry is no longer present.'''
@@ -87,7 +87,7 @@ def remove_registry():
         # NB: it's safe to logout of a registry that was never logged in
         check_call(['docker', 'logout', netloc])
 
-    remove_state('kubernetes-common.registry.configured')
+    remove_state('kubernetes-master-worker-base.registry.configured')
 
 
 def manage_docker_opts(opts, remove=False):
