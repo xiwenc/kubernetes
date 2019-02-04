@@ -1,5 +1,5 @@
 /*
-Copyright 2016 The Kubernetes Authors.
+Copyright 2019 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,5 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package mux contains abstractions for http multiplexing of APIs.
-package mux // import "k8s.io/apiserver/pkg/server/mux"
+// Package printers is helper for formatting and printing runtime objects into
+// primitives io.writer.
+package printers // import "k8s.io/cli-runtime/pkg/genericclioptions/printers"
