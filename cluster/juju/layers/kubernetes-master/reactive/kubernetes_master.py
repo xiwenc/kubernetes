@@ -1771,8 +1771,8 @@ def get_kube_system_pods_not_running():
 
     pending = [pod for pod in result['items']
                if pod['status']['phase'] == 'Pending']
-    all_pending = len(pending) == len(result['items'])
-    if is_state('endpoint.gcp.ready') and all_pending:
+    any_pending = len(pending) > 0
+    if is_state('endpoint.gcp.ready') and any_pending:
         poke_network_unavailable()
         return not_running
 
