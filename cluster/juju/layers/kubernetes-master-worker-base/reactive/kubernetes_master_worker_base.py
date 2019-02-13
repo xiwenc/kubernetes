@@ -2,11 +2,12 @@ import os
 import shutil
 import subprocess
 from subprocess import check_call, check_output, CalledProcessError
+from charms import leadership
 from charms.reactive import endpoint_from_flag, set_state, remove_state, \
     when, when_not, when_any, data_changed
 from charms.docker import DockerOpts
 from charms.layer.kubernetes_common import client_crt_path, client_key_path
-from charms.layer import snap, leadership
+from charms.layer import snap
 from charmhelpers.core import hookenv, unitdata
 from charmhelpers.core.host import install_ca_cert
 
