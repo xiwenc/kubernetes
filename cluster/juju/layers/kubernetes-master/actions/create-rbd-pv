@@ -19,6 +19,7 @@ from charms.reactive import is_state
 from charmhelpers.core.hookenv import action_get
 from charmhelpers.core.hookenv import action_set
 from charmhelpers.core.hookenv import action_fail
+from charmhelpers.core.hookenv import config
 from subprocess import check_call
 from subprocess import check_output
 from subprocess import CalledProcessError
@@ -38,13 +39,13 @@ def main():
     this script thinks the environment is 'sane' enough to provision volumes.
     '''
 
+    using_csi = config().get('ceph-use-csi')
     # k8s >= 1.10 uses CSI and doesn't directly create persistent volumes
-    if get_version('kube-apiserver') >= (1, 10):
-       print('This action is deprecated in favor of CSI creation of persistent volumes')
-       print('in Kubernetes >= 1.10. Just create the PVC and a PV will be created')
-       print('for you.')
-       action_fail('Deprecated, just create PVC.')
-       return
+    if using_csi:
+        print('CSI is enabled. This action is not used with CSI. Volume')
+        print('creation occurs when a PVC is created.')
+        action_fail('Deprecated, just create PVC.')
+        return
 
     # validate relationship pre-reqs before additional steps can be taken
     if not validate_relation():

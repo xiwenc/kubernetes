@@ -246,3 +246,8 @@ options:
     description: |
       Path to Keystone certificate authority for securing communications to Keystone.
     default: ""
+  ceph-use-csi:
+    type: boolean
+    default: true
+    description: |
+      Enables the Container Storage Interface version of Ceph on clusters that support it.

@@ -562,8 +562,7 @@ def set_final_status():
 
         ceph_admin = endpoint_from_flag('ceph-storage.available')
 
-        if get_version('kube-apiserver') >= (1, 12) and \
-                not ceph_admin.key():
+        if ceph_using_csi() and not ceph_admin.key():
             hookenv.status_set(
                 'waiting', 'Waiting for Ceph to provide a key.')
             return
@@ -850,8 +849,7 @@ def configure_cdk_addons():
     metricsEnabled = str(hookenv.config('enable-metrics')).lower()
     default_storage = ''
     ceph = {}
-    if (is_state('kubernetes-master.ceph.configured') and
-            get_version('kube-apiserver') >= (1, 12)):
+    if is_state('kubernetes-master.ceph.configured') and ceph_using_csi():
         cephEnabled = "true"
         ceph_ep = endpoint_from_flag('ceph-storage.available')
         b64_ceph_key = base64.b64encode(ceph_ep.key().encode('utf-8'))
@@ -990,22 +988,53 @@ def ceph_storage_pool():
     :return: None
     '''
     hookenv.log('Creating Ceph pools.')
+    # note that we do not delete pools when
+    # swapping configurations on purpose to preserve
+    # any data a user may have
+    if ceph_using_csi():
 
-    ReplicatedPool(
-        name='xfs-pool',
-        service='admin',
-        replicas=3,
-        app_name=None,
-    ).create()
+        ReplicatedPool(
+            name='xfs-pool',
+            service='admin',
+            replicas=3,
+            app_name=None,
+        ).create()
 
-    ReplicatedPool(
-        name='ext4-pool',
-        service='admin',
-        replicas=3,
-        app_name=None,
-    ).create()
+        ReplicatedPool(
+            name='ext4-pool',
+            service='admin',
+            replicas=3,
+            app_name=None,
+        ).create()
+    else:
+
+        ReplicatedPool(
+            name='rbd',
+            service='admin',
+            replicas=3,
+            app_name=None,
+        ).create()
 
     set_state('kubernetes-master.ceph.pool.created')
+
+
+@when('kubernetes-master.ceph.configured',
+      'config.changed.ceph-use-csi')
+def handle_ceph_config_changed():
+    clear_flag('kubernetes-master.ceph.configured')
+    clear_flag('kubernetes-master.ceph.pool.created')
+
+
+def ceph_using_csi():
+    config = hookenv.config()
+    csi = config.get('ceph-use-csi')
+    # >=1.12 will use CSI.
+    new_enough = get_version('kube-apiserver') >= (1, 12)
+
+    if not new_enough:
+        return False
+
+    return csi
 
 
 @when('ceph-storage.available')
@@ -1020,8 +1049,7 @@ def ceph_storage():
 
     ceph_admin = endpoint_from_flag('ceph-storage.available')
 
-    # >=1.12 will use CSI.
-    if get_version('kube-apiserver') >= (1, 12) and not ceph_admin.key():
+    if ceph_using_csi() and not ceph_admin.key():
         return  # Retry until Ceph gives us a key.
 
     ceph_context = {
@@ -1062,8 +1090,8 @@ def ceph_storage():
         # allow this method to re-execute
         return
 
-    # CSI isn't available, so we need to do it ourselves,
-    if get_version('kube-apiserver') < (1, 12):
+    # CSI isn't available, so we need to do it ourselves
+    if not ceph_using_csi():
         try:
             # At first glance this is deceptive. The apply stanza will
             # create if it doesn't exist, otherwise it will update the
