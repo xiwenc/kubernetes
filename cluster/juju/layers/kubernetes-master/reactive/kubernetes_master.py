@@ -1103,7 +1103,6 @@ def ceph_storage():
             cmd = ['kubectl', 'apply', '-f', '/tmp/ceph-secret.yaml']
             check_call(cmd)
             os.remove('/tmp/ceph-secret.yaml')
-            set_state('kubernetes-master.ceph.pool.created')
         except:  # NOQA
             # The enlistment in kubernetes failed, return and
             # prepare for re-exec.
