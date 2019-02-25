@@ -647,6 +647,10 @@ def merge_kubelet_extra_config(config, extra_config):
 
 def configure_kubelet(dns, ingress_ip):
     kubelet_opts = {}
+
+    kubelet_opts['container-runtime'] = 'remote'
+    kubelet_opts['container-runtime-endpoint'] = 'unix:///var/run/containerd/containerd.sock'
+
     kubelet_opts['require-kubeconfig'] = 'true'
     kubelet_opts['kubeconfig'] = kubeconfig_path
     kubelet_opts['network-plugin'] = 'cni'

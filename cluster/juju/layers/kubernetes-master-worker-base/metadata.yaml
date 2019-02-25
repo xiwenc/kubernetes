@@ -1,3 +1,9 @@
+maintainers:
+  - Tim Van Steenburgh <tim.van.steenburgh@canonical.com>
+  - George Kraft <george.kraft@canonical.com>
+  - Konstantinos Tsakalozos <kos.tsakalozos@canonical.com>
+  - Mike Wilson <mike.wilson@canonical.com>
+  - Joe Borg <joseph.borg@canonical.com>
 requires:
   docker-registry:
     interface: docker-registry
