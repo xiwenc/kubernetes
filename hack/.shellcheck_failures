@@ -19,12 +19,9 @@
 ./cluster/gce/upgrade.sh
 ./cluster/gce/util.sh
 ./cluster/images/conformance/run_e2e.sh
-./cluster/juju/prereqs/ubuntu-juju.sh
-./cluster/juju/util.sh
 ./cluster/kubemark/gce/config-default.sh
 ./cluster/kubemark/iks/config-default.sh
 ./cluster/kubemark/util.sh
-./cluster/local/util.sh
 ./cluster/log-dump/log-dump.sh
 ./cluster/pre-existing/util.sh
 ./cluster/restore-from-backup.sh
