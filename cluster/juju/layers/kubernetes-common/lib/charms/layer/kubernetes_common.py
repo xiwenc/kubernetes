@@ -460,6 +460,19 @@ def write_openstack_snap_config(component):
     if openstack.manage_security_groups:
         lines.append('manage-security-groups = {}'.format(
             openstack.manage_security_groups))
+    if any([openstack.bs_version,
+            openstack.trust_device_path,
+            openstack.ignore_volume_az]):
+        lines.append('')
+        lines.append('[BlockStorage]')
+    if openstack.bs_version is not None:
+        lines.append('bs-version = {}'.format(openstack.bs_version))
+    if openstack.trust_device_path is not None:
+        lines.append('trust-device-path = {}'.format(
+            openstack.trust_device_path))
+    if openstack.ignore_volume_az is not None:
+        lines.append('ignore-volume-az = {}'.format(
+            openstack.ignore_volume_az))
 
     comp_cloud_config_path = cloud_config_path(component)
     comp_cloud_config_path.write_text(''.join('{}\n'.format(l) for l in lines))
