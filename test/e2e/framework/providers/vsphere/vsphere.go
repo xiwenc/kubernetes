@@ -1,5 +1,5 @@
 /*
-Copyright 2017 The Kubernetes Authors.
+Copyright 2019 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,10 +14,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package instrumentation
+package vsphere
 
 import (
-	// ensure libs have a chance to perform initialization
-	_ "k8s.io/kubernetes/test/e2e/instrumentation/logging"
-	_ "k8s.io/kubernetes/test/e2e/instrumentation/monitoring"
+	"k8s.io/kubernetes/test/e2e/framework"
 )
+
+func init() {
+	framework.RegisterProvider("vsphere", newProvider)
+}
+
+func newProvider() (framework.ProviderInterface, error) {
+	return &framework.NullProvider{}, nil
+}
